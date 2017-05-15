@@ -14,7 +14,7 @@ module Spokes exposing (..)
 import Board exposing ( Board, initialBoard )
 
 import Html exposing ( Html, Attribute
-                     , div, text, span, p, h2, h3
+                     , div, text, span, p, h2, h3, a, node
                      )
 import Html.Attributes exposing ( value, size, maxlength, href, src, title
                                 , alt, style, selected )
@@ -58,7 +58,25 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     ( model, Cmd.none )
 
+br : Html Msg
+br =
+    Html.br [] []
+
+center : List (Attribute msg) -> List (Html msg) -> Html msg
+center =
+    node "center"
+
 view : Model -> Html Msg
 view model =
-    div []
-        [ text "Hello World." ]
+    center []
+        [ h2 [] [ text "Spokes" ]
+        , p [] [ text "Invented by Christopher St. Clair"
+               , br
+               , text "Coded by Bill St. Clair"
+               ]
+        , p [] [ a [ href "rules/" ] [ text "Rules" ]
+               , br
+               , a [ href "https://github.com/billstclair/spokes" ]
+                   [ text "GitHub" ]
+               ]
+        ]
