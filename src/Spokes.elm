@@ -11,7 +11,8 @@
 
 module Spokes exposing (..)
 
-import Board exposing ( Board, initialBoard )
+import Board exposing ( Board
+                      , RenderInfo, render )
 
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
@@ -33,7 +34,8 @@ type Phase
     | Resolution
 
 type alias Model =
-    { board : Int
+    { board : Board
+    , renderInfo : RenderInfo
     , players : Int
     , turn : Int
     , phase : Phase
@@ -41,7 +43,8 @@ type alias Model =
 
 initialModel : Model
 initialModel =
-    { board = 0
+    { board = Board.initialBoard
+    , renderInfo = Board.renderInfo 600
     , players = 2
     , turn = 1
     , phase = Placement
@@ -74,6 +77,8 @@ view model =
                , br
                , text "Coded by Bill St. Clair"
                ]
+        , p []
+            [ Board.render model.board model.renderInfo ]
         , p [] [ a [ href "rules/" ] [ text "Rules" ]
                , br
                , a [ href "https://github.com/billstclair/spokes" ]
