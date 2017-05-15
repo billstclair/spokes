@@ -11,8 +11,8 @@
 
 module Spokes exposing (..)
 
-import Types exposing ( Board, RenderInfo )
-import Board exposing ( render )
+import Spokes.Types as Types exposing ( Board, RenderInfo )
+import Spokes.Board as Board exposing ( render )
 
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
