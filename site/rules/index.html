@@ -1,0 +1,159 @@
+<html>
+<head>
+<title>Spokes - A Board Game</title>
+</head>
+<body style="width: 40em; margin: auto; margin-top: 5em; padding: 2em; border: solid;">
+<h2>Spokes - A Board Game</h2>
+<p>Invented by Christopher St. Clair</p>
+
+<h3>Overview</h3>
+
+<p>Spokes is a game of interactions for 2 or 4 players. Two colored sets of stones, one set black, one white. Same colored stones push each other apart, opposite colored stones pull each other together.</p>
+
+<p>Your goal is to push stones onto your outer home spokes while stopping your opponents from doing so.</p>
+
+<h3>Setup</h3>
+
+<p>The Board: The Spokes board is composed of a center point (called a node) surrounded by 4 concentric circles surrounding it.</p>
+
+<p>Radiating from the center point are 4 evenly spaced lines (called spokes) drawn from the center point to the outer circle.</p>
+
+<ul>
+<li>The 4 lines are 90&deg; apart from each other.</li>
+<li>The 1st circle (Circle B) has no extra spokes radiating from it.</li>
+<li>The 2nd circle (Circle C) has 8 spokes radiating from it (4 spokes in addition to the 4 radiating from Circle B), all 8 evenly spaced.</li>
+<li>The 3rd circle (Circle D) has 16 spokes radiating from it (8 spokes in addition to the 8 radiating from Circle C), all evenly spaced.</li>
+<li>The 16 spokes from Circle D end where they intersect the 4th circle, called the Home Circle.</li>
+</ul>
+
+<p>At every intersection of a line and a circle, a node is drawn.</p>
+
+<p>The nodes are labelled as such, starting on the North (up-pointing) spoke and continuing clockwise around their respective circles:</p>
+
+<ul>
+<li>For the center node, it is labelled A.</li>
+<li>For Circle B, they are labelled B1, B2, B3, and B4.</li>
+<li>For Circle C, they are labelled C1-C8.</li>
+<li>For Circle D, they are labelled D1-D16.</li>
+<li>For the Home Circle, they are simply labelled 1-16.</li>
+</ul>
+
+<p>The Pieces: The playing pieces are 44 white and 44 black flat stones, shaped so they can be stacked.</p>
+
+<p>Pen and Paper: Each player will need a pen and paper on which to record their moves.</p>
+
+<h3>Preparing for Play</h3>
+
+<p>For 2 player games, players choose 8 nodes on the Home Circle (these are their Home Nodes). Player 1 has Home Nodes 1-8, and Player 2 has Home Nodes 9-16.</p>
+
+<p>For 4 player games, players choose 4 nodes on the Home Circle. Player 1 has Home Nodes 1-4, Player 2 has Home Nodes 5-8, Player 3 has Home Nodes 9-12, and player 4 has Home Nodes 13-16.</p>
+
+<p>Players should sit in front of their set of Home Nodes around the board.</p>
+
+<h3>Gameplay</h3>
+
+<p>Their are two phases to each turn: Placement Phase and Resolution Phase.</p>
+	
+<ol>
+<li>Placement Phase</li>
+<ul>
+<li>All players write down the color of stone they will be playing and the node they will be playing it on.</li>
+<li>All players can play either color of stone.</li>
+<li>For example, to record that you will be playing a white stone on node D12, you would write "wD12".</li>
+<li>To record that you will be playing a black stone on node B3, you would write "bB3".</li>
+<li>To record that you will be playing a white stone on node A1, you would write "wA1".</li>
+<li>Players cannot place stones on the Home Nodes, only on nodes A1, B1-B4, C1-C8, and D1-D16.</li>
+<li>Stones can be pushed or pulled onto and off of the Home Nodes during the Resolution Phase (see 5. Interactions), and filling the Home Nodes is how the game is won (see 6. End Game).</li>
+<li>Players should be careful that their recorded placement is not seen by the other players while recording it.</li>
+<li>After all players have recorded their placement, all players reveal their placements to each other simultaneously and place their stones on the board.</li>
+<li>In all subsequent rounds, players can only choose to place their stones on empty nodes. </li>
+</ul>
+<li>Resolution Phase</li>
+<ul>
+<li>Player 1 resolves all the interactions between adjacent stones on the board (adjacent stones meaning stones whose nodes are directly connected by a line.</li>
+<li>He may resolve the interactions in whatever order he wishes.</li>
+<li>His turn is done once their are no adjacent, charged stones on the board (for clarification on charged stones versus neutral stones, see 5. Interactions).</li>
+</ul>
+</ol>
+
+<p>During the next turn, players again record and place their stones simultaneously.</p>
+
+<p>Player 2 then resolves all interactions.</p>
+
+<p>If it is a 4 player game, Players 3 and 4 take their turns resolving all interactions subsequently.</p>
+
+<h3>Interactions</h3>
+
+<p>During the Resolution Phase, when two charged stones are adjacent to each other, they interact depending on their color.</p>
+
+<p>The current player may resolve these interactions in whatever order they wish.</p>
+
+<p>If they are both of the same color (both white or both black), they push each other apart.</p>
+
+<ul>
+<li>The current player chooses which one pushes the other. </li>
+<li>The pushed stone moves in a straight line away from the other stone, either along its circle or its spoke, to the next adjacent, empty node</li>
+<li>If their is already another stone of the same color on the next node, the pushed stone can be moved perpendicularly to an empty node, instead of in a straight line. </li>
+<li>This cannot be done if the stone on the next node is of the opposite color (see below).</li>
+<li>You cannot push a stone onto a node occupied by a stone of the same color.</li>
+</ul>
+
+<p>If the two adjacent stones are of opposite color (one white and one black), they attract each other.</p>
+
+<ul>
+<li>The current player chooses which one pulls the other.</li>
+<li>The pulled stone is stacked on top of the other, forming a block.</li>
+</ul>
+
+<h3>Blocks</h3>
+
+<p>A block is two stones of opposite color occupying the same node.</p>
+
+<p>A block counts as a neutral stone. It cannot push or pull other stones, and cannot be pushed or pulled by them. It remains stationary on its node until the end of the game, effectively "blocking" the node. It is possible for 2 players to instantly create a block during the Placement Phase if they each choose to place opposing colored stones on the same node.</p>
+
+<h3>Doubles, Triples, Quadruples</h3>
+
+<p>If two players place the same colored stone on the same node, this creates a double. During the Resolution Phase, all doubles must be resolved first by moving the top stone of the double to an adjacent, empty node or to an adjacent single stone of the opposite color, creating a block. If the double is surrounded by blocks and single stones of the same color, move the top stone of the double onto an adjacent single stone and attempt to resolve the double onto an empty node or single stone of the opposite color again. Repeat until all doubles are resolved. If the double is surrounded by blocks, it cannot be resolved and is left where it is. The Resolution Phase then continues as normal.</p>
+
+In 4 player games, it is possible to have 3 or 4 stones placed on the same node. If any are of opposite color, they instantly create a block. In the case of 2 black and 2 white, 2 blocks are created, one block must be moved to an adjacent empty node if possible. If not, it must be moved onto an adjacent single stone and then that stone must be resolved as if it were part of a double. All such doubles, triples, or quadruples must be resolved to single stones or to blocks before any other interactions are resolved. If they cannot because they are surrounded by blocks, leave them and continue play. 
+
+<h3>End Game</h3>
+
+<p>The game ends when one of the following occurs:</p>
+
+<ol>
+<li>One player has at least one stone on every one of his Home Nodes and all interactions are resolved. </li>
+<li>One player has every adjacent node to his Home Nodes blocked (and thus cannot score any more points on his Home Nodes) and all interactions are resolved. </li>
+<li>An unbreakable loop is created and all other interactions are resolved. An unbreakable loop is where, by the rules of resolution, one or more stones can never come to rest. As this interaction cannot be resolved, it ends the game. Remove all stones involved in the infinite loop from the board. These stones do not count towards anyone's score. </li>
+<li>All players but one resign. </li>
+</ol>
+
+<p>When all players but one resign, the last player wins. For all other endgame scenarios, each player counts the total number of stones on their Home Nodes (blocks count as two stones for this purpose), and the player with the most stones wins.</p>
+
+<p>This means that the game could end because one player filled all of his Home Nodes with at least one stone, but another player wins because he had more blocks (worth 2 stones each) on his Home Nodes.</p>
+
+<p>If there is a tie, the player with the most stones on their home semicircle (for 2 player games) or quadrant (for 4 player games) wins. This prevents someone from simply blocking all other players to try to win. If they do this and do not try to score on their own Home Spokes, they will lose.</p>
+
+<p>For 2 player games, Player 1's semicircle is B1-B2, C1-C4, and D1-D8. Player 2's semicircle is the remaining nodes. If there is still a tie, Player 2 wins as he moved 2nd in the first round.</p>
+
+<p>For 4 player games, Player 1's quadrant is B1, C1-C2, and D1-D4.</p>
+
+<p>The other three quadrants are similarly numbered. If there is still a tie, the tied player who moved last in the first round wins.</p>
+
+Node A1 does not count as anyone's home territory. 
+
+<h3>Miscellaneous</h3>
+
+<p>2 vs 2: 4 players can also play 2 vs 2. In this form of gameplay, Players 1 and 2 have the joint Home Nodes of 1-8, and Players 3 and 4 have the joint Home Nodes of 9-16. The players on the same teams otherwise play normally, but players on the same team can discuss and collaborate on their planned placements before recording the placement of their stones.</p>
+
+<p>Otherwise, play proceeds exactly like a standard 4 player game.</p>
+
+<p>The team with the most stones on their joint Home Nodes at the end of the game wins.</p>
+
+<p style='text-align: center;'><img src='board-600x594.jpg' alt='Spokes Board' width='600' height='594'/><br/>
+Above is the Spokes board.
+</p>
+
+<p style='text-align: center;'><img src='game-600x562.jpg' alt='Spokes Game' width='600' height='562'/><br/>
+Above is a trial game played on 5/11/17, Player 1 played by me, Player 2 playing randomly generated moves. Note the unbreakable loop created in quadrant 1. This ended the game and the 5 white stones in the loop were removed before scoring.  Player 1 won 11 to 2.
+</p>
