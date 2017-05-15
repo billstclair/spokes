@@ -1,0 +1,7 @@
+#!/bin/bash
+
+elm make src/Spokes.elm --output site/index.html
+cd site
+rsyncit
+
+
