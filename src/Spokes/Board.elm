@@ -303,7 +303,7 @@ getNode name board =
 playMove : Move -> Board -> Board
 playMove move board =
     case move of
-        Placement name color ->
+        Placement color name ->
             case getNode name board of
                 Nothing ->
                     board
@@ -315,7 +315,7 @@ playMove move board =
                                     { node | blackStones = node.blackStones + 1 }
                     in
                         Dict.insert name n board
-        Resolution from to color ->
+        Resolution color from to ->
             case getNode from board of
                 Nothing ->
                     board
@@ -408,11 +408,11 @@ possibleResolutions node board =
                                 else
                                     List.concat
                                       [ if white >= 1 && (not <| white<=black) then
-                                            [ Resolution from to White ]
+                                            [ Resolution White from to ]
                                         else
                                             []
                                       , if black >= 1 && (not <| black<=white) then
-                                            [ Resolution from to Black ]
+                                            [ Resolution Black from to ]
                                         else
                                             []
                                       ]

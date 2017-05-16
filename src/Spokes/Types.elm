@@ -53,8 +53,8 @@ type alias RenderInfo =
 type Color = Black | White
 
 type Move
-    = Placement String Color
-    | Resolution String String Color
+    = Placement Color String
+    | Resolution Color String String
 
 type alias History =
     List Move
