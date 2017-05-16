@@ -296,3 +296,125 @@ renderLines board info =
     in
         List.concat <| List.map nodeLines nodeConnections
 
+getNode : String -> Board -> Maybe Node
+getNode name board =
+    Dict.get name board
+
+playMove : Move -> Board -> Board
+playMove move board =
+    case move of
+        Placement name color ->
+            case getNode name board of
+                Nothing ->
+                    board
+                Just node ->
+                    let n = case color of
+                                White ->
+                                    { node | whiteStones = node.whiteStones + 1 }
+                                Black ->
+                                    { node | blackStones = node.blackStones + 1 }
+                    in
+                        Dict.insert name n board
+        Resolution from to color ->
+            case getNode from board of
+                Nothing ->
+                    board
+                Just fromNode ->
+                    case getNode to board of
+                        Nothing ->
+                            board
+                        Just toNode ->
+                            let (fn, tn) =
+                                    case color of
+                                        White ->
+                                            ( { fromNode
+                                                  | whiteStones
+                                                    = fromNode.whiteStones - 1
+                                              }
+                                            , { toNode
+                                                  | whiteStones
+                                                    = toNode.whiteStones + 1
+                                              }
+                                            )
+                                        Black ->
+                                            ( { fromNode
+                                                  | blackStones
+                                                    = fromNode.blackStones - 1
+                                              }
+                                            , { toNode
+                                                  | blackStones
+                                                    = toNode.blackStones + 1
+                                              }
+                                            )
+                            in
+                                if from == to then
+                                    board
+                                else
+                                    board
+                                        |> Dict.insert from fn
+                                        |> Dict.insert to tn
+
+nodeNeedsResolution : Node -> Bool
+nodeNeedsResolution node =
+    not (node.whiteStones<=1 && node.blackStones<=1)
+
+isNodeBlocked : Node -> Bool
+isNodeBlocked node =
+    node.whiteStones==1 && node.blackStones==1
+
+nodesNeedingResolution : Board -> List Node
+nodesNeedingResolution board =
+    let f = (\name node nodes ->
+                 if nodeNeedsResolution node then
+                     node :: nodes
+                 else
+                     nodes
+            )
+    in
+        Dict.foldl f [] board
+
+blockedNode : Node
+blockedNode =
+    { name = "blocked"
+    , connections = []
+    , whiteStones = 1
+    , blackStones = 1
+    }
+
+getNodeWithDefault : String -> Node -> Board -> Node
+getNodeWithDefault name default board =
+    case getNode name board of
+        Just node ->
+            node
+        Nothing ->
+            default
+
+-- TODO
+-- Doesn't follow rules yet. Allows any move.
+possibleResolutions : Node -> Board -> List Move
+possibleResolutions node board =
+    if not <| nodeNeedsResolution node then
+        []
+    else
+        let white = node.whiteStones
+            black = node.blackStones
+            from = node.name
+        in
+            List.concatMap (\to ->
+                                if isNodeBlocked
+                                     <| getNodeWithDefault to blockedNode board
+                                then
+                                    []
+                                else
+                                    List.concat
+                                      [ if white >= 1 && (not <| white<=black) then
+                                            [ Resolution from to White ]
+                                        else
+                                            []
+                                      , if black >= 1 && (not <| black<=white) then
+                                            [ Resolution from to Black ]
+                                        else
+                                            []
+                                      ]
+                           )
+                           node.connections

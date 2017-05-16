@@ -54,7 +54,7 @@ type Color = Black | White
 
 type Move
     = Placement String Color
-    | Resolution Color String String
+    | Resolution String String Color
 
 type alias History =
     List Move
