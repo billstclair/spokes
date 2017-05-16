@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------
 --
 -- Spokes.elm
--- Christopher St. Clair's Spokes board game, in Elm.
+-- Chris St. Clair's Spokes board game, in Elm.
 -- Copyright (c) 2017 Bill St. Clair <billstclair@gmail.com>
 -- Some rights reserved.
 -- Distributed under the MIT License
@@ -102,7 +102,7 @@ view model =
                , a [ href "https://github.com/billstclair/spokes" ]
                    [ text "GitHub" ]
                ]
-        , p [] [ text "Invented by Christopher St. Clair"
+        , p [] [ text "Invented by Chris St. Clair"
                , br
                , text "Coded by Bill St. Clair"
                ]
