@@ -22,6 +22,8 @@ type alias Board =
 
 type alias Node =
     { name : String
+    , circle : String
+    , spoke : Int
     , connections : List String
     , whiteStones : Int
     , blackStones : Int

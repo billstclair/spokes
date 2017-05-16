@@ -16,12 +16,15 @@ import Spokes.Board as Board exposing ( render )
 
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
-                     , input, table, tr, td
+                     , input, table, tr, td, button
                      )
 import Html.Attributes exposing ( value, size, maxlength, href, src, title
-                                , alt, style, selected, type_, name, checked )
+                                , alt, style, selected, type_, name, checked
+                                , placeholder, disabled
+                                )
 import Html.Events exposing ( onClick, onInput, on, keyCode )
 import Array exposing ( Array )
+import Debug exposing ( log )
 
 main =
     Html.program
@@ -42,7 +45,11 @@ type alias Model =
     , turn : Int
     , phase : Phase
     , inputs : Array String
+    , resolver : Int
     }
+
+initialInputs : Array String
+initialInputs = Array.repeat 4 ""
 
 initialModel : Model
 initialModel =
@@ -51,7 +58,8 @@ initialModel =
     , players = 2
     , turn = 1
     , phase = Placement
-    , inputs = Array.empty
+    , inputs = initialInputs
+    , resolver = 1
     }
 
 init : ( Model, Cmd Msg )
@@ -61,6 +69,7 @@ init =
 type Msg
     = SetPlayers Int
     | SetInput Int String
+    | Place
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -73,6 +82,9 @@ update msg model =
             ( { model | inputs = Array.set player value model.inputs }
             , Cmd.none
             )
+        Place ->
+            -- TODO
+            ( model, Cmd.none )
 
 br : Html Msg
 br =
@@ -86,11 +98,34 @@ center : List (Attribute msg) -> List (Html msg) -> Html msg
 center =
     node "center"
 
+canPlace : Model -> Bool
+canPlace model =
+    False
+
+placementLine : Model -> Html Msg
+placementLine model =
+    span []
+        [ text <| "Player " ++ (toString model.resolver) ++ " will resolve. "
+        , button [ onClick Place
+                 , disabled (not <| canPlace model)
+                 ]
+              [ text "Place" ]
+        ]
+
+resolutionLine : Model -> Html Msg
+resolutionLine model =
+    text ""
+
 view : Model -> Html Msg
 view model =
     center []
         [ h2 [] [ text "Spokes" ]
         , inputItems model
+        , p []
+            [ case model.phase of
+                  Placement -> placementLine model
+                  Resolution -> resolutionLine model
+            ]
         , p []
             [ Board.render model.board model.renderInfo ]
         , p [] [ b [ text "Players:" ]
@@ -108,15 +143,39 @@ view model =
                ]
         ]
 
+isEven : Int -> Bool
+isEven int =
+    int % 2 == 0
+
+examplePlaceString : Int -> String
+examplePlaceString player =
+    let bw = if isEven player then "w" else "b"
+        circle = case player of
+                     1 -> "b"
+                     2 -> ""
+                     3 -> "d"
+                     _ -> "c"
+        spoke = case player of
+                    1 -> 1
+                    2 -> 12
+                    3 -> 9
+                    _ -> 4
+    in
+        bw ++ circle ++ (toString spoke)
+
 inputItem : Int -> Model -> Html Msg
 inputItem player model =
     span []
         [ b [ text <| (toString player) ++ ": " ]
         , input [ type_ "text"
                 , onInput <| SetInput player
+                , placeholder <| examplePlaceString player
                 , size 5
+                , value (Maybe.withDefault "" <| Array.get player model.inputs)
                 ]
               []
+        , text " "
+        , text (toString <| Board.count model.players player model.board)
         , text " "
         ]
 

@@ -10,6 +10,7 @@
 ----------------------------------------------------------------------
 
 module Spokes.Board exposing ( initialBoard, renderInfo, render
+                             , parseNodeName, count
                              )
 
 import Spokes.Types as Types exposing ( Board, Node
@@ -32,11 +33,16 @@ import Debug exposing ( log )
 
 node : String -> List String -> Node
 node name connections =
-    { name = name
-    , connections = connections
-    , whiteStones = 0
-    , blackStones = 0
-    }
+    let (circle, spoke) = Result.withDefault ("", 0)
+                          <| parseNodeName name
+    in
+        { name = name
+        , circle = circle
+        , spoke = spoke
+        , connections = connections
+        , whiteStones = 0
+        , blackStones = 0
+        }
 
 initialNodes : List Node
 initialNodes =
@@ -376,6 +382,8 @@ nodesNeedingResolution board =
 blockedNode : Node
 blockedNode =
     { name = "blocked"
+    , circle = ""
+    , spoke = 0         
     , connections = []
     , whiteStones = 1
     , blackStones = 1
@@ -418,3 +426,116 @@ possibleResolutions node board =
                                       ]
                            )
                            node.connections
+
+parseNodeName : String -> Result String (String, Int)
+parseNodeName nodeName =
+    let circle = String.toUpper <| String.left 1 nodeName
+        (c, i) = if circle=="A" || circle=="B" || circle=="C" || circle=="D" then
+                     (circle, String.dropLeft 1 nodeName)
+                 else
+                     ("", nodeName)
+    in
+        case String.toInt i of
+            Ok spoke ->
+                Ok (c, spoke)
+            Err msg ->
+                Err msg            
+
+twoPlayerSpokes : Dict Int (Dict String (List Int))
+twoPlayerSpokes =
+    Dict.fromList
+        [ (1, Dict.fromList
+               [ ("B", List.range 1 2)
+               , ("C", List.range 1 4)
+               , ("D", List.range 1 8)
+               , ("", List.range 1 8)
+               ]
+          )
+        , (2, Dict.fromList
+               [ ("B", List.range 3 4)
+               , ("C", List.range 5 8)
+               , ("D", List.range 9 16)
+               , ("", List.range 9 16)
+               ]
+          )
+        ]
+
+fourPlayerSpokes : Dict Int (Dict String (List Int))
+fourPlayerSpokes =
+    Dict.fromList
+        [ (1, Dict.fromList
+               [ ("B", List.range 1 1)
+               , ("C", List.range 1 2)
+               , ("D", List.range 1 4)
+               , ("", List.range 1 4)
+               ]
+          )
+        , (2, Dict.fromList
+               [ ("B", List.range 2 2)
+               , ("C", List.range 3 4)
+               , ("D", List.range 5 8)
+               , ("", List.range 5 8)
+               ]
+          )
+        , (3, Dict.fromList
+               [ ("B", List.range 3 3)
+               , ("C", List.range 5 6)
+               , ("D", List.range 9 12)
+               , ("", List.range 9 12)
+               ]
+          )
+        , (4, Dict.fromList
+               [ ("B", List.range 4 4)
+               , ("C", List.range 7 8)
+               , ("D", List.range 13 16)
+               , ("", List.range 13 16)
+               ]
+          )
+        ]
+
+count : Int -> Int -> Board -> (Int, Int)
+count players player board =
+    let dict = if players == 2 then
+                   twoPlayerSpokes
+               else
+                   fourPlayerSpokes
+    in
+        case Dict.get player dict of
+            Nothing ->
+                (0, 0)
+            Just spokesDict ->
+                Dict.foldl (\name node (outer, total) ->
+                                case Dict.get node.circle spokesDict of
+                                    Nothing ->
+                                        (outer, total)
+                                    Just spokes ->
+                                        let cnt = node.whiteStones +
+                                                  node.blackStones
+                                        in
+                                            if List.member node.spoke spokes then
+                                                if node.circle == "" then
+                                                    (outer+cnt, total+cnt)
+                                                else
+                                                    (outer, total+cnt)
+                                            else
+                                                (outer, total)
+                           )
+                    (0, 0)
+                    board
+
+parsePlacementMove : String -> Result String Move
+parsePlacementMove string =
+    let color = case String.toUpper <| String.left 1 string of
+                    "W" -> Just White
+                    "B" -> Just Black
+                    _ -> Nothing
+    in
+        case color of
+            Nothing ->
+                Err <| "Bad color in: " ++ string
+            Just c ->
+                case parseNodeName <| String.dropLeft 1 string of
+                    Err msg ->
+                        Err msg
+                    Ok (circle, spoke) ->
+                        Ok <| Placement c <| circle ++ (toString spoke)
