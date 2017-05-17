@@ -140,15 +140,15 @@ circlePointLocations circle center radius stoneRadius count textRDelta textTheta
                    let theta = 2.0 * pi * (toFloat i) / (toFloat count)
                        r = toFloat radius
                        textTheta = theta + textThetaDelta
-                       textR = toFloat <| radius - (if circle == "" then
+                       textR = toFloat <| radius - ({-if circle == "" then
                                                         2 * textRDelta // 3
-                                                    else
+                                                    else-}
                                                         textRDelta
                                                    )
                        x = (sin theta) * r
                        y = (cos theta) * r
                        textX = if radius == 0 then
-                                   center + textRDelta
+                                   center + (textRDelta // 2)
                                else
                                    center + (round <| (sin textTheta) * textR)
                        textY = if radius == 0 then
@@ -181,7 +181,7 @@ renderInfo diameter =
     let sizes = sizesFromDiameter diameter
         radius = toFloat sizes.radius
         sr = sizes.stoneRadius
-        dr = 20
+        dr = 28
         drf = toFloat dr
         dt = 8.0 * pi / 360.0
         cpl = (\circle r count ->
@@ -239,6 +239,7 @@ render board info =
                         ]
                       , renderPoints board info
                       , renderLines board info
+                      , renderStones board info
                       ]
             ]
 
@@ -279,12 +280,132 @@ renderPoints board info =
             [ Dict.toList info.locations
               |> List.map Tuple.second
               |> List.map draw
-            , Dict.toList info.stoneLocations
-              |> List.map Tuple.second
-              |> List.concatMap drawStones
             , Dict.toList info.textLocations
               |> List.map drawText
+            , if debugStoneLocations then
+                  Dict.toList info.stoneLocations
+                    |> List.map Tuple.second
+                    |> List.concatMap drawStones
+              else
+                  []
             ]
+
+partitionStones : Int -> Int -> List (List String)
+partitionStones black white =
+    let total = black + white
+    in
+        if total == 0 then
+            []
+        else if total == 1 then
+            [ if black > 0 then
+                  [ "black" ]
+              else
+                  [ "white" ]
+            ]
+        else if total == 2 then
+            [ if black == 2 then
+                  [ "black", "black" ]
+              else if white == 2 then
+                  [ "white", "white" ]
+              else
+                  [ "black", "white" ]
+            ]
+        else if total == 3 then
+            if black > 0 && white > 0 then
+                [ [ "black", "white" ]
+                , [ if black == 2 then
+                        "black"
+                    else
+                        "white"
+                  ]
+                ]
+            else if black == 3 then
+                [["black","black"],["black"]]
+            else
+                [["white","white"],["white"]]
+        else if black > 0 && white > 0 then
+            [ [ "black", "white" ]
+            , if black == 1 then
+                  [ "white", "white" ]
+              else if black == 2 then
+                  [ "black", "white" ]
+              else
+                  [ "black", "black" ]
+            ]
+        else if black == 0 then
+            [["white","white"],["white","white"]]
+        else
+            [["black","black"],["black","black"]]
+
+renderStones : Board -> RenderInfo -> List (Svg msg)
+renderStones board info =
+    let sizes = info.sizes
+        sr = toString sizes.stoneRadius
+        locs = info.locations
+        slocs = info.stoneLocations
+        delta = 10
+        drawStone = (\x y color outline ->
+                         Svg.circle [ cx (toString x)
+                                    , cy (toString y)
+                                    , r sr
+                                    , fillOpacity "1"
+                                    , fill color
+                                    , stroke
+                                          <| Maybe.withDefault "darkgray" outline
+                                    ]
+                         []
+                    )
+        isBlock = (\stones ->
+                       stones == ["white","black"] || stones == ["black","white"]
+                  )
+        drawPile = (\p stones twoPiles otherBlock ->
+                        let outline = if (not otherBlock) && (isBlock stones) then
+                                          Nothing
+                                      else if not twoPiles then
+                                          if List.length stones > 1 then
+                                              Just "red"
+                                          else
+                                              Nothing
+                                      else
+                                              Just "red"
+                        in
+                            case stones of
+                                [] ->
+                                    []
+                                [ stone ] ->
+                                    [ drawStone p.x p.y stone outline ]
+                                s1 :: s2 :: _ ->
+                                    [ drawStone p.x (p.y + delta) s1 outline
+                                    , drawStone p.x p.y s2 outline
+                                    ]
+                   )
+        drawNode = (\node ->
+                          let name = node.name
+                              p = Maybe.withDefault zeroPoint
+                                    <| Dict.get name locs
+                              (sp1, sp2) = Maybe.withDefault (zeroPoint, zeroPoint)
+                                           <| Dict.get name slocs
+                              ws = node.whiteStones
+                              bs = node.blackStones
+                          in
+                              case partitionStones bs ws of
+                                  [] ->
+                                      []
+                                  [ stones ] ->
+                                      drawPile p stones False False
+                                  s1 :: s2 :: _ ->
+                                      List.concat [ drawPile sp1 s1 True False
+                                                  , drawPile sp2 s2 True (isBlock s1)
+                                                  ]
+                   )
+    in
+        Dict.toList board
+            |> List.map Tuple.second
+            |> List.concatMap drawNode
+
+debugStoneLocations : Bool
+debugStoneLocations =
+    False
 
 inBiggerCircle : String -> String -> Bool
 inBiggerCircle c1 c2 =
