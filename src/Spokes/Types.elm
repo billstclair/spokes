@@ -44,12 +44,14 @@ type alias Sizes =
     , cRadius : Int
     , dRadius : Int
     , radius : Int
+    , stoneRadius : Int
     }
 
 type alias RenderInfo =
     { sizes : Sizes
     , locations : Dict String Point
     , textLocations : Dict String Point
+    , stoneLocations  : Dict String (Point, Point)
     }
 
 type Color = Black | White

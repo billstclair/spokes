@@ -116,10 +116,25 @@ sizesFromDiameter diameter =
         , cRadius = radius // 2
         , dRadius = 3 * radius // 4
         , radius = radius
+        , stoneRadius = radius // 16 --bRadius/4
         }
 
-circlePointLocations : String -> Int -> Int -> Int -> Int -> Float -> List (String, Point, Point)
-circlePointLocations circle center radius count textRDelta textThetaDelta =
+computeStoneLocations : Int -> Int -> Int -> Float -> (Point, Point)
+computeStoneLocations stoneRadius x y theta =
+    let sr = toFloat stoneRadius
+        dx = round((cos theta) * sr)
+        dy = round((sin theta) * sr)
+    in
+        ( { x = x + dx
+          , y = y + dy
+          }
+        , { x = x - dx
+          , y = y - dy
+          }
+        )
+
+circlePointLocations : String -> Int -> Int -> Int -> Int -> Int -> Float -> List (String, Point, Point, (Point, Point))
+circlePointLocations circle center radius stoneRadius count textRDelta textThetaDelta =
     let is = List.range 0 (count-1)
         loc = (\i ->
                    let theta = 2.0 * pi * (toFloat i) / (toFloat count)
@@ -140,21 +155,24 @@ circlePointLocations circle center radius count textRDelta textThetaDelta =
                                    center - (textRDelta // 2)
                                else
                                    center - (round <| (cos textTheta) * textR)
+                       ix = center + (round x)
+                       iy = center - (round y)
                    in
-                       ( { x = center + (round x)
-                         , y = center - (round y)
+                       ( { x = ix
+                         , y = iy
                          }
                        , { x = textX
                          , y = textY
                          }
+                       , computeStoneLocations stoneRadius ix iy theta
                        )
               )
     in
         List.map (\i ->
-                      let (location, textLoc) = loc i
+                      let (location, textLoc, stoneLocs) = loc i
                           label = circle ++ (toString (i+1))
                       in
-                          (label, location, textLoc)
+                          (label, location, textLoc, stoneLocs)
                  )
                  is
 
@@ -162,12 +180,13 @@ renderInfo : Int -> RenderInfo
 renderInfo diameter =
     let sizes = sizesFromDiameter diameter
         radius = toFloat sizes.radius
+        sr = sizes.stoneRadius
         dr = 20
         drf = toFloat dr
         dt = 8.0 * pi / 360.0
         cpl = (\circle r count ->
                    circlePointLocations
-                   circle sizes.center r count dr
+                   circle sizes.center r sr count dr
                    (dt * radius / (if r == 0 then 1 else toFloat r))
               )
         locs = List.concat
@@ -177,13 +196,15 @@ renderInfo diameter =
                , cpl "D" sizes.dRadius 16
                , cpl "" sizes.radius 16
                ]
-        locations = List.map (\(c, l, _) -> (c, l)) locs
-        textLocations = List.map (\(c, _, l) -> (c, l)) locs
+        locations = List.map (\(c, l, _, _) -> (c, l)) locs
+        textLocations = List.map (\(c, _, l, _) -> (c, l)) locs
+        stoneLocations = List.map (\(c, _, _, l) -> (c, l)) locs
         
     in
         { sizes = sizes
         , locations = Dict.fromList locations
         , textLocations = Dict.fromList textLocations
+        , stoneLocations = Dict.fromList stoneLocations
         }
 
 circle : String -> String -> Svg msg
@@ -194,7 +215,9 @@ circle center radius =
 render : Board -> RenderInfo -> Html msg
 render board info =
     let sizes = info.sizes
-        w = toString (sizes.diameter + 18)
+        indent = 20
+        is = toString indent
+        w = toString (sizes.diameter + indent + indent)
         d = toString sizes.diameter
         c = toString sizes.center
         r = toString sizes.radius
@@ -203,7 +226,7 @@ render board info =
         rd = toString sizes.dRadius
     in
         svg [ width w, height w ]
-            [ g [ transform <| "translate(9,9)"
+            [ g [ transform <| "translate("++is++","++is++")"
                 , stroke "black"
                 , strokeWidth "2"
                 , fillOpacity "0"
@@ -222,14 +245,24 @@ render board info =
 renderPoints : Board -> RenderInfo -> List (Svg msg)
 renderPoints board info =
     let sizes = info.sizes
-        locs = info.locations
-        textLocs = info.textLocations
+        sr = toString sizes.stoneRadius
         draw = (\p ->
                     let x = toString p.x
                         y = toString p.y
                     in
                         Svg.circle [cx x, cy y, r "5", fillOpacity "1"] []
                )
+        drawStone = (\p ->
+                         let x = toString p.x
+                             y = toString p.y
+                         in
+                             Svg.circle [ cx x, cy y, r sr
+                                        , fillOpacity "1"
+                                        , fill "white"
+                                        ]
+                                 []
+                    )
+        drawStones = (\(p1, p2) -> [ drawStone p1, drawStone p2 ])
         drawText = (\(c, p) ->
                      Svg.text_
                          [ x <| toString p.x
@@ -241,10 +274,13 @@ renderPoints board info =
                    )
     in
         List.concat
-            [ Dict.toList locs
+            [ Dict.toList info.locations
               |> List.map Tuple.second
               |> List.map draw
-            , Dict.toList textLocs
+            , Dict.toList info.stoneLocations
+              |> List.map Tuple.second
+              |> List.concatMap drawStones
+            , Dict.toList info.textLocations
               |> List.map drawText
             ]
 
