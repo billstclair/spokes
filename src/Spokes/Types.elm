@@ -11,7 +11,7 @@
 
 module Spokes.Types exposing ( Board, Node
                              , Point, Sizes, RenderInfo
-                             , Color(..), Move (..), History
+                             , Color(..), Move(..), History
                              , zeroPoint
                              )
 

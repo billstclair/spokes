@@ -11,8 +11,8 @@
 
 module Spokes exposing (..)
 
-import Spokes.Types as Types exposing ( Board, RenderInfo )
-import Spokes.Board as Board exposing ( render )
+import Spokes.Types as Types exposing ( Board, RenderInfo, Move )
+import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove )
 
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
@@ -79,12 +79,25 @@ update msg model =
             , Cmd.none
             )
         SetInput player value ->
-            ( { model | inputs = Array.set player value model.inputs }
+            ( { model | inputs = Array.set (player-1) value model.inputs }
             , Cmd.none
             )
         Place ->
-            -- TODO
-            ( model, Cmd.none )
+            case getPlacements model of
+                Nothing ->
+                    ( model, Cmd.none )
+                Just moves ->
+                    let board = List.foldr
+                                (\move b -> makeMove move b)
+                                model.board
+                                moves
+                    in
+                        ( { model
+                              | board = board
+                              , inputs = initialInputs
+                          }
+                          , Cmd.none
+                        )
 
 br : Html Msg
 br =
@@ -98,9 +111,34 @@ center : List (Attribute msg) -> List (Html msg) -> Html msg
 center =
     node "center"
 
+getPlacements : Model -> Maybe (List Move)
+getPlacements model =
+    let inputs = model.inputs
+        board = model.board
+        loop = (\idx res ->
+                    if idx < 0 then
+                        Just <| List.reverse res
+                    else
+                        case Array.get idx inputs of
+                            Nothing ->
+                                Nothing
+                            Just string ->
+                                case isLegalPlacement string board of
+                                    Err _ ->
+                                        Nothing
+                                    Ok move ->
+                                        loop (idx-1) <| move :: res
+               )
+    in
+        loop (model.players - 1) []
+
 canPlace : Model -> Bool
 canPlace model =
-    False
+    case getPlacements model of
+        Nothing ->
+            False
+        Just _ ->
+            True
 
 placementLine : Model -> Html Msg
 placementLine model =
@@ -152,7 +190,7 @@ examplePlaceString player =
     let bw = if isEven player then "w" else "b"
         circle = case player of
                      1 -> "b"
-                     2 -> ""
+                     2 -> "d"
                      3 -> "d"
                      _ -> "c"
         spoke = case player of
@@ -171,7 +209,7 @@ inputItem player model =
                 , onInput <| SetInput player
                 , placeholder <| examplePlaceString player
                 , size 5
-                , value (Maybe.withDefault "" <| Array.get player model.inputs)
+                , value (Maybe.withDefault "" <| Array.get (player-1) model.inputs)
                 ]
               []
         , text " "

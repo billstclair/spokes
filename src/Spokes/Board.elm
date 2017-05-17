@@ -11,6 +11,7 @@
 
 module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , parseNodeName, count
+                             , isLegalMove, isLegalPlacement, makeMove
                              )
 
 import Spokes.Types as Types exposing ( Board, Node
@@ -149,7 +150,6 @@ circlePointLocations circle center radius count textRDelta textThetaDelta =
                        )
               )
     in
-        log "cpl" <|
         List.map (\i ->
                       let (location, textLoc) = loc i
                           label = circle ++ (toString (i+1))
@@ -305,6 +305,10 @@ renderLines board info =
 getNode : String -> Board -> Maybe Node
 getNode name board =
     Dict.get name board
+
+setNode : String -> Node -> Board -> Board
+setNode name node board =
+    Dict.insert name node board
 
 playMove : Move -> Board -> Board
 playMove move board =
@@ -532,10 +536,58 @@ parsePlacementMove string =
     in
         case color of
             Nothing ->
-                Err <| "Bad color in: " ++ string
+                Err <| "Bad color in: '" ++ string ++ "'"
             Just c ->
                 case parseNodeName <| String.dropLeft 1 string of
                     Err msg ->
                         Err msg
                     Ok (circle, spoke) ->
-                        Ok <| Placement c <| circle ++ (toString spoke)
+                        if circle == "" then
+                            Err "Can't place in home circle."
+                        else
+                            Ok <| Placement c <| circle ++ (toString spoke)
+
+isLegalMove : Move -> Board -> Bool
+isLegalMove move board =
+    case move of
+        Placement color nodeName ->
+            case getNode nodeName board of
+                Nothing ->
+                    False
+                Just node ->
+                    node.whiteStones==0 && node.blackStones==0
+        Resolution color from to ->
+            -- TODO
+            True
+
+isLegalPlacement : String -> Board -> Result String Move
+isLegalPlacement string board =
+    case parsePlacementMove string of
+        Err msg ->
+            Err <| "Can't parse placement: " ++ msg
+        Ok move ->
+            if isLegalMove move board then
+                Ok move
+            else
+                Err <| "Not legal move: " ++ string
+
+makeMove : Move -> Board -> Board
+makeMove move board =
+    case move of
+        Placement color nodeName ->
+            case getNode nodeName board of
+                Nothing ->
+                    board
+                Just node ->
+                    let n = case color of
+                                White -> { node
+                                             | whiteStones = node.whiteStones + 1
+                                         }
+                                Black -> { node
+                                             | blackStones = node.blackStones + 1
+                                         }
+                    in
+                        setNode nodeName n board
+        Resolution color from to ->
+            -- TODO
+            board
