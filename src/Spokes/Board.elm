@@ -252,17 +252,19 @@ renderPoints board info =
                     in
                         Svg.circle [cx x, cy y, r "5", fillOpacity "1"] []
                )
-        drawStone = (\p ->
+        drawStone = (\p color ->
                          let x = toString p.x
                              y = toString p.y
                          in
                              Svg.circle [ cx x, cy y, r sr
                                         , fillOpacity "1"
-                                        , fill "white"
+                                        , fill color
                                         ]
                                  []
                     )
-        drawStones = (\(p1, p2) -> [ drawStone p1, drawStone p2 ])
+        drawStones = (\(p1, p2) -> [ drawStone p1 "white"
+                                   , drawStone p2 "black"
+                                   ])
         drawText = (\(c, p) ->
                      Svg.text_
                          [ x <| toString p.x
