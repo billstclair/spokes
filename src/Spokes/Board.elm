@@ -12,12 +12,14 @@
 module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , parseNodeName, count
                              , isLegalMove, isLegalPlacement, makeMove
+                             , computeDisplayList
                              )
 
 import Spokes.Types as Types exposing ( Board, Node
                                       , Point, Sizes, RenderInfo
                                       , Color(..), Move (..), History
-                                      , zeroPoint
+                                      , StonePile, DisplayList
+                                      , zeroPoint, emptyStonePile
                                       )
         
 import Dict exposing ( Dict )
@@ -212,8 +214,8 @@ circle center radius =
     Svg.circle [ cx center, cy center, r radius ]
         []
 
-render : Board -> RenderInfo -> Html msg
-render board info =
+render : DisplayList -> RenderInfo -> Html msg
+render list info =
     let sizes = info.sizes
         indent = 20
         is = toString indent
@@ -237,14 +239,14 @@ render board info =
                         , circle c rc
                         , circle c rd
                         ]
-                      , renderPoints board info
-                      , renderLines board info
-                      , renderStones board info
+                      , renderPoints info
+                      , renderLines info
+                      , renderStones list info
                       ]
             ]
 
-renderPoints : Board -> RenderInfo -> List (Svg msg)
-renderPoints board info =
+renderPoints : RenderInfo -> List (Svg msg)
+renderPoints info =
     let sizes = info.sizes
         sr = toString sizes.stoneRadius
         draw = (\p ->
@@ -337,13 +339,14 @@ partitionStones black white =
         else
             [["black","black"],["black","black"]]
 
-renderStones : Board -> RenderInfo -> List (Svg msg)
-renderStones board info =
+renderStones : DisplayList -> RenderInfo -> List (Svg msg)
+renderStones list info =
     let sizes = info.sizes
         sr = toString sizes.stoneRadius
         locs = info.locations
         slocs = info.stoneLocations
         delta = 10
+        drawStone : Int -> Int -> String -> Maybe String -> Svg msg
         drawStone = (\x y color outline ->
                          Svg.circle [ cx (toString x)
                                     , cy (toString y)
@@ -353,23 +356,17 @@ renderStones board info =
                                     , stroke
                                           <| Maybe.withDefault "darkgray" outline
                                     ]
-                         []
+                             []
                     )
-        isBlock = (\stones ->
-                       stones == ["white","black"] || stones == ["black","white"]
-                  )
-        drawPile = (\p stones twoPiles otherBlock ->
-                        let outline = if (not otherBlock) && (isBlock stones) then
+        drawPile : StonePile -> List (Svg msg)
+        drawPile = (\pile ->
+                        let outline = if pile.resolutions == Nothing then
                                           Nothing
-                                      else if not twoPiles then
-                                          if List.length stones > 1 then
-                                              Just "red"
-                                          else
-                                              Nothing
                                       else
-                                              Just "red"
+                                          Just "red"
+                            p = pile.location
                         in
-                            case stones of
+                            case pile.colors of
                                 [] ->
                                     []
                                 [ stone ] ->
@@ -379,29 +376,8 @@ renderStones board info =
                                     , drawStone p.x p.y s2 outline
                                     ]
                    )
-        drawNode = (\node ->
-                          let name = node.name
-                              p = Maybe.withDefault zeroPoint
-                                    <| Dict.get name locs
-                              (sp1, sp2) = Maybe.withDefault (zeroPoint, zeroPoint)
-                                           <| Dict.get name slocs
-                              ws = node.whiteStones
-                              bs = node.blackStones
-                          in
-                              case partitionStones bs ws of
-                                  [] ->
-                                      []
-                                  [ stones ] ->
-                                      drawPile p stones False False
-                                  s1 :: s2 :: _ ->
-                                      List.concat [ drawPile sp1 s1 True False
-                                                  , drawPile sp2 s2 True (isBlock s1)
-                                                  ]
-                   )
     in
-        Dict.toList board
-            |> List.map Tuple.second
-            |> List.concatMap drawNode
+        List.concatMap drawPile list.allPiles
 
 debugStoneLocations : Bool
 debugStoneLocations =
@@ -429,8 +405,8 @@ inBiggerCircle c1 c2 =
                      else
                          False                         
 
-renderLines : Board -> RenderInfo -> List (Svg msg)
-renderLines board info =
+renderLines : RenderInfo -> List (Svg msg)
+renderLines info =
     let locs = info.locations
         drawLine = (\fx fy p ->
                         let tx = toString p.x
@@ -750,3 +726,68 @@ makeMove move board =
         Resolution color from to ->
             -- TODO
             board
+
+computeDisplayList : Board -> RenderInfo -> DisplayList
+computeDisplayList board info =
+    let sizes = info.sizes
+        sr = toString sizes.stoneRadius
+        locs = info.locations
+        slocs = info.stoneLocations
+        isBlock : List String -> Bool
+        isBlock = (\stones ->
+                       stones == ["white","black"] || stones == ["black","white"]
+                  )
+        drawPile : String -> Point -> List String -> Bool -> Bool -> StonePile
+        drawPile = (\nodeName p stones twoPiles otherBlock ->
+                        let needRes = if (not otherBlock) && (isBlock stones) then
+                                          False
+                                      else if not twoPiles then
+                                          if List.length stones > 1 then
+                                              True
+                                          else
+                                              False
+                                      else
+                                              True
+                            resolutions = if needRes then
+                                              Just [] --TODO: compute this
+                                          else
+                                              Nothing
+                        in
+                            case stones of
+                                [] ->
+                                    emptyStonePile
+                                _ ->
+                                    { nodeName = nodeName
+                                    , colors = stones
+                                    , location = p
+                                    , resolutions = resolutions
+                                    }
+                   )
+        drawNode : Node -> List StonePile
+        drawNode = (\node ->
+                          let name = node.name
+                              p = Maybe.withDefault zeroPoint
+                                    <| Dict.get name locs
+                              (sp1, sp2) = Maybe.withDefault (zeroPoint, zeroPoint)
+                                           <| Dict.get name slocs
+                              ws = node.whiteStones
+                              bs = node.blackStones
+                          in
+                              case partitionStones bs ws of
+                                  [] ->
+                                      []
+                                  [ stones ] ->
+                                      [ drawPile name p stones False False ]
+                                  s1 :: s2 :: _ ->
+                                      [ drawPile name sp1 s1 True False
+                                      , drawPile name sp2 s2 True (isBlock s1)
+                                      ]
+                   )
+        allPiles = Dict.toList board
+                     |> List.map Tuple.second
+                     |> List.concatMap drawNode
+        unresolved = List.filter (\pile -> pile.resolutions /= Nothing) allPiles
+    in
+        { allPiles = allPiles
+        , unresolvedPiles = unresolved
+        }

@@ -11,8 +11,12 @@
 
 module Spokes exposing (..)
 
-import Spokes.Types as Types exposing ( Board, RenderInfo, Move )
-import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove )
+import Spokes.Types as Types exposing ( Board, RenderInfo, Move
+                                      , DisplayList, emptyDisplayList
+                                      )
+import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
+                                      , computeDisplayList
+                                      )
 
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
@@ -41,6 +45,7 @@ type Phase
 type alias Model =
     { board : Board
     , renderInfo : RenderInfo
+    , displayList : DisplayList
     , players : Int
     , turn : Int
     , phase : Phase
@@ -55,6 +60,7 @@ initialModel : Model
 initialModel =
     { board = Board.initialBoard
     , renderInfo = Board.renderInfo 600
+    , displayList = emptyDisplayList
     , players = 2
     , turn = 1
     , phase = Placement
@@ -94,6 +100,8 @@ update msg model =
                     in
                         ( { model
                               | board = board
+                              , displayList = computeDisplayList
+                                              board model.renderInfo
                               , inputs = initialInputs
                           }
                           , Cmd.none
@@ -165,7 +173,7 @@ view model =
                   Resolution -> resolutionLine model
             ]
         , p []
-            [ Board.render model.board model.renderInfo ]
+            [ Board.render model.displayList model.renderInfo ]
         , p [] [ b [ text "Players:" ]
                , radio "players" "2 " (model.players == 2) <| SetPlayers 2
                , radio "players" "4" (model.players == 4) <| SetPlayers 4

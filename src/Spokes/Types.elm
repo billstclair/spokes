@@ -12,7 +12,8 @@
 module Spokes.Types exposing ( Board, Node
                              , Point, Sizes, RenderInfo
                              , Color(..), Move(..), History
-                             , zeroPoint
+                             , StonePile, DisplayList
+                             , zeroPoint, emptyStonePile, emptyDisplayList
                              )
 
 import Dict exposing ( Dict )
@@ -62,3 +63,29 @@ type Move
 
 type alias History =
     List Move
+
+type alias StonePile =
+    { nodeName : String
+    , colors : List String
+    , location : Point
+    , resolutions : Maybe (List String)
+    }
+
+emptyStonePile : StonePile
+emptyStonePile =
+    { nodeName = ""
+    , colors = []
+    , location = zeroPoint
+    , resolutions = Nothing
+    }
+
+type alias DisplayList =
+    { allPiles : List StonePile
+    , unresolvedPiles : List StonePile
+    }
+
+emptyDisplayList : DisplayList
+emptyDisplayList =
+    { allPiles = []
+    , unresolvedPiles = []
+    }
