@@ -11,7 +11,7 @@
 
 module Spokes.Types exposing ( Board, Node
                              , Point, Sizes, RenderInfo
-                             , Color(..), Move(..), History
+                             , Color(..), MovedStone(..), Move(..), History
                              , StonePile, DisplayList
                              , zeroPoint, emptyStonePile, emptyDisplayList
                              )
@@ -55,11 +55,18 @@ type alias RenderInfo =
     , stoneLocations  : Dict String (Point, Point)
     }
 
-type Color = Black | White
+type Color
+    = Black
+    | White
+
+type MovedStone
+    = MoveBlack
+    | MoveWhite
+    | MoveBlock
 
 type Move
     = Placement Color String
-    | Resolution Color String String
+    | Resolution MovedStone String String
 
 type alias History =
     List Move
@@ -68,7 +75,7 @@ type alias StonePile =
     { nodeName : String
     , colors : List String
     , location : Point
-    , resolutions : Maybe (List String)
+    , resolutions : Maybe (List Move)
     }
 
 emptyStonePile : StonePile

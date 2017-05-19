@@ -17,8 +17,8 @@ module Spokes.Board exposing ( initialBoard, renderInfo, render
 
 import Spokes.Types as Types exposing ( Board, Node
                                       , Point, Sizes, RenderInfo
-                                      , Color(..), Move (..), History
-                                      , StonePile, DisplayList
+                                      , Color(..), Move (..), MovedStone(..)
+                                      , History, StonePile, DisplayList
                                       , zeroPoint, emptyStonePile
                                       )
         
@@ -292,53 +292,6 @@ renderPoints info =
                   []
             ]
 
-partitionStones : Int -> Int -> List (List String)
-partitionStones black white =
-    let total = black + white
-    in
-        if total == 0 then
-            []
-        else if total == 1 then
-            [ if black > 0 then
-                  [ "black" ]
-              else
-                  [ "white" ]
-            ]
-        else if total == 2 then
-            [ if black == 2 then
-                  [ "black", "black" ]
-              else if white == 2 then
-                  [ "white", "white" ]
-              else
-                  [ "black", "white" ]
-            ]
-        else if total == 3 then
-            if black > 0 && white > 0 then
-                [ [ "black", "white" ]
-                , [ if black == 2 then
-                        "black"
-                    else
-                        "white"
-                  ]
-                ]
-            else if black == 3 then
-                [["black","black"],["black"]]
-            else
-                [["white","white"],["white"]]
-        else if black > 0 && white > 0 then
-            [ [ "black", "white" ]
-            , if black == 1 then
-                  [ "white", "white" ]
-              else if black == 2 then
-                  [ "black", "white" ]
-              else
-                  [ "black", "black" ]
-            ]
-        else if black == 0 then
-            [["white","white"],["white","white"]]
-        else
-            [["black","black"],["black","black"]]
-
 renderStones : DisplayList -> RenderInfo -> List (Svg msg)
 renderStones list info =
     let sizes = info.sizes
@@ -460,7 +413,7 @@ playMove move board =
                                     { node | blackStones = node.blackStones + 1 }
                     in
                         Dict.insert name n board
-        Resolution color from to ->
+        Resolution moved from to ->
             case getNode from board of
                 Nothing ->
                     board
@@ -469,28 +422,24 @@ playMove move board =
                         Nothing ->
                             board
                         Just toNode ->
-                            let (fn, tn) =
-                                    case color of
-                                        White ->
-                                            ( { fromNode
-                                                  | whiteStones
-                                                    = fromNode.whiteStones - 1
+                            let (dw, db) = case moved of
+                                               MoveWhite -> (1, 0)
+                                               MoveBlack -> (0, 1)
+                                               MoveBlock -> (1, 1)
+                                (fn, tn) =
+                                        ( { fromNode
+                                              | whiteStones
+                                                = fromNode.whiteStones - dw
+                                              , blackStones
+                                                = fromNode.blackStones - db
                                               }
-                                            , { toNode
-                                                  | whiteStones
-                                                    = toNode.whiteStones + 1
-                                              }
-                                            )
-                                        Black ->
-                                            ( { fromNode
-                                                  | blackStones
-                                                    = fromNode.blackStones - 1
-                                              }
-                                            , { toNode
-                                                  | blackStones
-                                                    = toNode.blackStones + 1
-                                              }
-                                            )
+                                        , { toNode
+                                              | whiteStones
+                                                = toNode.whiteStones + dw
+                                              , blackStones
+                                                = toNode.blackStones + db
+                                          }
+                                        )
                             in
                                 if from == to then
                                     board
@@ -535,36 +484,6 @@ getNodeWithDefault name default board =
             node
         Nothing ->
             default
-
--- TODO
--- Doesn't follow rules yet. Allows any move.
-possibleResolutions : Node -> Board -> List Move
-possibleResolutions node board =
-    if not <| nodeNeedsResolution node then
-        []
-    else
-        let white = node.whiteStones
-            black = node.blackStones
-            from = node.name
-        in
-            List.concatMap (\to ->
-                                if isNodeBlocked
-                                     <| getNodeWithDefault to blockedNode board
-                                then
-                                    []
-                                else
-                                    List.concat
-                                      [ if white >= 1 && (not <| white<=black) then
-                                            [ Resolution White from to ]
-                                        else
-                                            []
-                                      , if black >= 1 && (not <| black<=white) then
-                                            [ Resolution Black from to ]
-                                        else
-                                            []
-                                      ]
-                           )
-                           node.connections
 
 parseNodeName : String -> Result String (String, Int)
 parseNodeName nodeName =
@@ -727,6 +646,228 @@ makeMove move board =
             -- TODO
             board
 
+partitionStones : Int -> Int -> List (List String)
+partitionStones black white =
+    let total = black + white
+    in
+        if total == 0 then
+            []
+        else if total == 1 then
+            [ if black > 0 then
+                  [ "black" ]
+              else
+                  [ "white" ]
+            ]
+        else if total == 2 then
+            [ if black == 2 then
+                  [ "black", "black" ]
+              else if white == 2 then
+                  [ "white", "white" ]
+              else
+                  [ "black", "white" ]
+            ]
+        else if total == 3 then
+            if black > 0 && white > 0 then
+                [ [ "black", "white" ]
+                , [ if black == 2 then
+                        "black"
+                    else
+                        "white"
+                  ]
+                ]
+            else if black == 3 then
+                [["black","black"],["black"]]
+            else
+                [["white","white"],["white"]]
+        else if black > 0 && white > 0 then
+            [ [ "black", "white" ]
+            , if black == 1 then
+                  [ "white", "white" ]
+              else if black == 2 then
+                  [ "black", "white" ]
+              else
+                  [ "black", "black" ]
+            ]
+        else if black == 0 then
+            [["white","white"],["white","white"]]
+        else
+            [["black","black"],["black","black"]]
+
+movesAway : List (String, List (String, Maybe String, List String))
+movesAway =
+    [ ("A1", [ ("B1",  Just "B3", [])
+             , ("B2",  Just "B4", [])
+             , ("B3",  Just "B1", [])
+             , ("B4",  Just "B2", [])
+             ]
+      )
+    , ("B1", [ ("C1", Just "A1", ["B2", "B4"])
+             , ("A1", Just "C1", ["B2", "B4"])
+             , ("B2", Just "B4", ["A1", "C1"])
+             , ("B4", Just "B2", ["A1", "C1"])
+             ]
+      )
+    , ("B2", [ ("C3", Just "A1", ["B1", "B3"])
+             , ("A1", Just "C3", ["B1", "B3"])
+             , ("B1", Just "B3", ["A1", "C3"])
+             , ("B3", Just "B1", ["A1", "C3"])
+             ]
+      )
+    , ("B3", [ ("C5", Just "A1", ["B2", "B4"])
+             , ("A1", Just "C5", ["B2", "B4"])
+             , ("B2", Just "B4", ["A1", "C5"])
+             , ("B4", Just "B2", ["A1", "C5"])
+             ]
+      )
+    , ("B4", [ ("C7", Just "A1", ["B3", "B1"])
+             , ("A1", Just "C7", ["B3", "B1"])
+             , ("B3", Just "B1", ["A1", "C7"])
+             , ("B1", Just "B3", ["A1", "C7"])
+             ]
+      )
+    , ("C1", [ ("D1", Just "B1", ["C2", "C8"])
+             , ("B1", Just "D1", ["C2", "C8"])
+             , ("C2", Just "C8", ["B1", "D1"])
+             , ("C8", Just "C2", ["B1", "D1"])
+             ]
+      )
+    , ("C2", [ ("D3", Nothing, ["C1", "C3"])
+             , ("C1", Just "C3", ["D3"])
+             , ("C3", Just "C1", ["D3"])
+             ]
+      )
+    , ("C3", [ ("D5", Just "B2", ["C2", "C4"])
+             , ("B2", Just "D5", ["C2", "C4"])
+             , ("C2", Just "C4", ["B2", "D5"])
+             , ("C4", Just "C2", ["B2", "D5"])
+             ]
+      )
+    , ("C4", [ ("D7", Nothing, ["C3", "C5"])
+             , ("C3", Just "C5", ["D7"])
+             , ("C5", Just "C3", ["D7"])
+             ]
+      )
+    , ("C5", [ ("D9", Just "B3", ["C4", "C6"])
+             , ("B3", Just "D9", ["C4", "C6"])
+             , ("C4", Just "C6", ["B3", "D9"])
+             , ("C6", Just "C4", ["B3", "D9"])
+             ]
+      )
+    , ("C6", [ ("D11", Nothing, ["C5", "C7"])
+             , ("C5", Just "C7", ["D11"])
+             , ("C7", Just "C5", ["D11"])
+             ]
+      )
+    , ("C7", [ ("D13", Just "B4", ["C6", "C8"])
+             , ("B4", Just "D13", ["C6", "C8"])
+             , ("C6", Just "C8", ["B4", "D13"])
+             , ("C8", Just "C6", ["B4", "D13"])
+             ]
+      )
+    , ("C8", [ ("D15", Nothing, ["C1", "C7"])
+             , ("C1", Just "C7", ["D15"])
+             , ("C7", Just "C1", ["D15"])
+             ]
+      )
+    , ("D1", [ ("1", Just "C1", ["D2", "D16"])
+             , ("C1", Just "1", ["D2", "D16"])
+             , ("D2", Just "D16", ["1", "C1"])
+             , ("D16", Just "D2", ["1", "C1"])
+             ]
+      )
+    , ("D2", [ ("2", Nothing, ["D1", "D3"])
+             , ("D1", Just "D3", ["2"])
+             , ("D3", Just "D1", ["2"])
+             ]
+      )
+    , ("D3", [ ("3", Just "C2", ["D2", "D4"])
+             , ("C2", Just "3", ["D2", "D4"])
+             , ("D2", Just "D4", ["3", "C2"])
+             , ("D4", Just "D2", ["3", "C2"])
+             ]
+      )
+    , ("D4", [ ("4", Nothing, ["D3", "D5"])
+             , ("D3", Just "D5", ["4"])
+             , ("D5", Just "D3", ["4"])
+             ]
+      )
+    , ("D5", [ ("5", Just "C3", ["D4", "D6"])
+             , ("C3", Just "5", ["D4", "D6"])
+             , ("D4", Just "D6", ["5", "C3"])
+             , ("D6", Just "D4", ["5", "C3"])
+             ]
+      )
+    , ("D6", [ ("6", Nothing, ["D5", "D7"])
+             , ("D5", Just "D7", ["6"])
+             , ("D7", Just "D5", ["6"])
+             ]
+      )
+    , ("D7", [ ("7", Just "C4", ["D6", "D8"])
+             , ("C4", Just "7", ["D6", "D8"])
+             , ("D6", Just "D8", ["7", "C4"])
+             , ("D8", Just "D6", ["7", "C4"])
+             ]
+      )
+    , ("D8", [ ("8", Nothing, ["D7", "D9"])
+             , ("D7", Just "D9", ["8"])
+             , ("D9", Just "D7", ["8"])
+             ]
+      )
+    , ("D9", [ ("9", Just "C5", ["D8", "D10"])
+             , ("C5", Just "9", ["D8", "D10"])
+             , ("D8", Just "D10", ["9", "C5"])
+             , ("D10", Just "D8", ["9", "C5"])
+             ]
+      )
+    , ("D10", [ ("10", Nothing, ["D8", "D11"])
+             , ("D9", Just "D11", ["10"])
+             , ("D11", Just "D9", ["10"])
+             ]
+      )
+    , ("D11", [ ("11", Just "C6", ["D10", "D12"])
+             , ("C6", Just "11", ["D10", "D12"])
+             , ("D10", Just "D12", ["11", "C6"])
+             , ("D12", Just "D10", ["11", "C6"])
+             ]
+      )
+    , ("D12", [ ("12", Nothing, ["D11", "D13"])
+             , ("D11", Just "D13", ["12"])
+             , ("D13", Just "D11", ["12"])
+             ]
+      )
+    , ("D13", [ ("13", Just "C7", ["D12", "D14"])
+             , ("C7", Just "13", ["D12", "D14"])
+             , ("D12", Just "D14", ["13", "C7"])
+             , ("D14", Just "D12", ["13", "C7"])
+             ]
+      )
+    , ("D14", [ ("14", Nothing, ["D13", "D15"])
+             , ("D13", Just "D15", ["14"])
+             , ("D15", Just "D13", ["14"])
+             ]
+      )
+    , ("D15", [ ("15", Just "C8", ["D14", "D16"])
+             , ("C8", Just "15", ["D14", "D16"])
+             , ("D14", Just "D16", ["15", "C8"])
+             , ("D16", Just "D14", ["15", "C8"])
+             ]
+      )
+    , ("D16", [ ("16", Nothing, ["D15", "D1"])
+             , ("D15", Just "D1", ["16"])
+             , ("D1", Just "D15", ["16"])
+             ]
+      )
+    ]
+
+movesAwayDict : Dict String (List (String, Maybe String, List String))
+movesAwayDict =
+    Dict.fromList movesAway
+
+-- Implement the resolution rules.
+computeResolutions : Node -> List (List String) -> Maybe (List Move, List Move)
+computeResolutions node partitionedStones =
+    Nothing
+
 computeDisplayList : Board -> RenderInfo -> DisplayList
 computeDisplayList board info =
     let sizes = info.sizes
@@ -737,8 +878,8 @@ computeDisplayList board info =
         isBlock = (\stones ->
                        stones == ["white","black"] || stones == ["black","white"]
                   )
-        drawPile : String -> Point -> List String -> Bool -> Bool -> StonePile
-        drawPile = (\nodeName p stones twoPiles otherBlock ->
+        drawPile : Node -> Point -> List String -> Bool -> Bool -> StonePile
+        drawPile = (\node p stones twoPiles otherBlock ->
                         let needRes = if (not otherBlock) && (isBlock stones) then
                                           False
                                       else if not twoPiles then
@@ -757,7 +898,7 @@ computeDisplayList board info =
                                 [] ->
                                     emptyStonePile
                                 _ ->
-                                    { nodeName = nodeName
+                                    { nodeName = node.name
                                     , colors = stones
                                     , location = p
                                     , resolutions = resolutions
@@ -777,10 +918,10 @@ computeDisplayList board info =
                                   [] ->
                                       []
                                   [ stones ] ->
-                                      [ drawPile name p stones False False ]
+                                      [ drawPile node p stones False False ]
                                   s1 :: s2 :: _ ->
-                                      [ drawPile name sp1 s1 True False
-                                      , drawPile name sp2 s2 True (isBlock s1)
+                                      [ drawPile node sp1 s1 True False
+                                      , drawPile node sp2 s2 True (isBlock s1)
                                       ]
                    )
         allPiles = Dict.toList board
