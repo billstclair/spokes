@@ -11,9 +11,11 @@
 
 module Spokes.Types exposing ( Board, Node
                              , Point, Sizes, RenderInfo
-                             , Color(..), MovedStone(..), Move(..), History
+                             , Color(..), MovedStone(..), NodeClassification(..)
+                             , Move(..), History
                              , StonePile, DisplayList
                              , zeroPoint, emptyStonePile, emptyDisplayList
+                             , get, set
                              )
 
 import Dict exposing ( Dict )
@@ -64,6 +66,12 @@ type MovedStone
     | MoveWhite
     | MoveBlock
 
+type NodeClassification
+    = Empty
+    | BlackOnly
+    | WhiteOnly
+    | Blocked
+
 type Move
     = Placement Color String
     | Resolution MovedStone String String
@@ -96,3 +104,21 @@ emptyDisplayList =
     { allPiles = []
     , unresolvedPiles = []
     }
+
+type alias XPlist a =
+    List (String, a)
+
+get : String -> XPlist a -> Maybe a
+get key plist =
+    case plist of
+        [] ->
+            Nothing
+        (k, v) :: rest ->
+            if key == k then
+                Just v
+            else
+                get key rest
+
+set : String -> a -> XPlist a -> XPlist a
+set key value plist =
+    (key, value) :: (List.filter (\(k,_) -> k /= key) plist)

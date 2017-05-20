@@ -18,10 +18,11 @@ module Spokes.Board exposing ( initialBoard, renderInfo, render
 import Spokes.Types as Types exposing ( Board, Node
                                       , Point, Sizes, RenderInfo
                                       , Color(..), Move (..), MovedStone(..)
+                                      , NodeClassification(..)
                                       , History, StonePile, DisplayList
                                       , zeroPoint, emptyStonePile
+                                      , get, set
                                       )
-        
 import Dict exposing ( Dict )
 import Html exposing ( Html )
 import Svg exposing (Svg, svg, line, g)
@@ -32,6 +33,7 @@ import Svg.Attributes exposing ( x, y, width, height
                                , fillOpacity, textAnchor, dominantBaseline
                                )
 import String
+import List.Extra as LE
 import Debug exposing ( log )
 
 node : String -> List String -> Node
@@ -693,8 +695,8 @@ partitionStones black white =
         else
             [["black","black"],["black","black"]]
 
-movesAway : List (String, List (String, Maybe String, List String))
-movesAway =
+movesAwayList : List (String, List (String, Maybe String, List String))
+movesAwayList =
     [ ("A1", [ ("B1",  Just "B3", [])
              , ("B2",  Just "B4", [])
              , ("B3",  Just "B1", [])
@@ -861,12 +863,141 @@ movesAway =
 
 movesAwayDict : Dict String (List (String, Maybe String, List String))
 movesAwayDict =
-    Dict.fromList movesAway
+    Dict.fromList movesAwayList
+
+classifyNeighbors : Node -> Board -> List (String, NodeClassification)
+classifyNeighbors node board =
+    List.map (\name ->
+                  (name
+                  , case Dict.get name board of
+                        Nothing ->
+                            Empty
+                        Just n ->
+                            if n.whiteStones == 0 then
+                                if n.blackStones == 0 then
+                                    Empty
+                                else
+                                    BlackOnly
+                            else
+                                if n.blackStones == 0 then
+                                    WhiteOnly
+                                else
+                                    Blocked
+                  )
+             )
+             node.connections                                  
+
+getMovesAway : String -> List (String, x, y) -> Maybe (String, x, y)
+getMovesAway name tuples =
+    case tuples of
+        [] ->
+            Nothing
+        tuple :: tail ->
+            let (on, _, _) = tuple
+            in
+                if on == name then
+                    Just tuple
+                else
+                    getMovesAway name tail
+
+calculateMovesAway : String -> MovedStone -> String -> List (String, NodeClassification) -> List Move
+calculateMovesAway nodeName color otherName classifications =
+     case Dict.get nodeName movesAwayDict of
+         Nothing ->
+             []
+         Just tuples ->
+             let sidewaysMoves = (\names res ->
+                                      case names of
+                                          [] ->
+                                              res
+                                          head :: tail ->
+                                              case get head classifications of
+                                                  Just Empty ->
+                                                      sidewaysMoves tail
+                                                          <| (Resolution
+                                                                  color nodeName head
+                                                             ) :: res
+                                                  _ ->
+                                                      sidewaysMoves tail res
+                                 )
+             in
+                 case getMovesAway otherName tuples of
+                     Nothing ->
+                         []
+                     Just (_, Just away, sideways) ->
+                         if case get away classifications of
+                                Just Empty -> True
+                                _ -> False
+                         then
+                             [ Resolution color nodeName away ]
+                         else
+                             sidewaysMoves sideways []
+                     Just (_, _, sideways) ->
+                         sidewaysMoves sideways []                         
+
+nodePairResolutions : String -> MovedStone -> String -> NodeClassification -> List (String, NodeClassification) -> List Move
+nodePairResolutions nodeName color otherName classification classifications  =
+    case color of
+        MoveWhite ->
+            case classification of
+                WhiteOnly ->
+                    calculateMovesAway nodeName color otherName classifications
+                BlackOnly ->
+                    [ Resolution color nodeName otherName ]
+                _ ->
+                    []                        
+        MoveBlack ->
+            case classification of
+                WhiteOnly ->
+                    [ Resolution color nodeName otherName ]
+                BlackOnly ->
+                    calculateMovesAway nodeName color otherName classifications
+                _ ->
+                    []
+        MoveBlock ->
+            case classification of
+                Empty ->
+                    [ Resolution color nodeName otherName ]
+                Blocked ->
+                    []
+                _ ->
+                    case LE.find (\(_,c) -> c == Empty) classifications of
+                        Just _ ->
+                            []
+                        Nothing ->
+                            [ Resolution color nodeName otherName ]
 
 -- Implement the resolution rules.
-computeResolutions : Node -> List (List String) -> Maybe (List Move, List Move)
-computeResolutions node partitionedStones =
-    Nothing
+computeResolutions : Node -> List String -> List String -> Board -> List Move
+computeResolutions node stones otherStones board =
+    let classifications = classifyNeighbors node board
+        nodeName = node.name
+        resolutions = (\color ->
+                           List.concatMap (\(otherName, classification) ->
+                                              nodePairResolutions
+                                                  nodeName color
+                                                  otherName classification
+                                                  classifications
+                                          )
+                                          classifications
+                      )
+    in
+        case stones of
+            ["black"] ->
+                resolutions MoveBlack
+            ["white"] ->
+                resolutions MoveWhite
+            ["black", "black"] ->
+                resolutions MoveBlack
+            ["white", "white"] ->
+                resolutions MoveWhite
+            ["black", "white"] ->
+                if otherStones == ["black", "white"] then
+                    resolutions MoveBlock
+                else
+                    []
+            _ ->
+                []
 
 computeDisplayList : Board -> RenderInfo -> DisplayList
 computeDisplayList board info =
@@ -878,21 +1009,14 @@ computeDisplayList board info =
         isBlock = (\stones ->
                        stones == ["white","black"] || stones == ["black","white"]
                   )
-        drawPile : Node -> Point -> List String -> Bool -> Bool -> StonePile
-        drawPile = (\node p stones twoPiles otherBlock ->
-                        let needRes = if (not otherBlock) && (isBlock stones) then
-                                          False
-                                      else if not twoPiles then
-                                          if List.length stones > 1 then
-                                              True
-                                          else
-                                              False
-                                      else
-                                              True
-                            resolutions = if needRes then
-                                              Just [] --TODO: compute this
-                                          else
-                                              Nothing
+        drawPile : Node -> Point -> List String -> List String -> StonePile
+        drawPile = (\node p stones otherStones ->
+                        let resolutions = computeResolutions
+                                          node stones otherStones board
+                            maybeRes = if resolutions == [] then
+                                           Nothing
+                                       else
+                                           Just resolutions
                         in
                             case stones of
                                 [] ->
@@ -901,7 +1025,7 @@ computeDisplayList board info =
                                     { nodeName = node.name
                                     , colors = stones
                                     , location = p
-                                    , resolutions = resolutions
+                                    , resolutions = maybeRes
                                     }
                    )
         drawNode : Node -> List StonePile
@@ -918,10 +1042,10 @@ computeDisplayList board info =
                                   [] ->
                                       []
                                   [ stones ] ->
-                                      [ drawPile node p stones False False ]
+                                      [ drawPile node p stones [] ]
                                   s1 :: s2 :: _ ->
-                                      [ drawPile node sp1 s1 True False
-                                      , drawPile node sp2 s2 True (isBlock s1)
+                                      [ drawPile node sp1 s1 []
+                                      , drawPile node sp2 s2 s1
                                       ]
                    )
         allPiles = Dict.toList board

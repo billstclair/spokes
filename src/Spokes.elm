@@ -100,7 +100,8 @@ update msg model =
                     in
                         ( { model
                               | board = board
-                              , displayList = computeDisplayList
+                              , displayList = log "computeDisplaylist" <|
+                                              computeDisplayList
                                               board model.renderInfo
                               , inputs = initialInputs
                           }
