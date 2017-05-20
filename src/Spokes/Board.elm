@@ -973,8 +973,8 @@ nodePairForcedResolutions nodeName color otherName classification classification
                         case LE.find (\(_, c) -> c==BlackOnly || c==Empty)
                             classifications
                         of
-                            Nothing -> []
-                            Just _ -> res
+                            Nothing -> res
+                            Just _ -> []
             MoveBlack ->
                 case classification of
                     WhiteOnly -> res
@@ -984,20 +984,20 @@ nodePairForcedResolutions nodeName color otherName classification classification
                         case LE.find (\(_, c) -> c==WhiteOnly || c==Empty)
                             classifications
                         of
-                            Nothing -> []
-                            Just _ -> res
+                            Nothing -> res
+                            Just _ -> []
             MoveBlock ->
                 case classification of
                     Empty -> res
                     Blocked -> []
                     _ ->
                         case LE.find (\(_, c) -> c==Empty) classifications of
-                            Nothing -> []
-                            Just _ -> res
+                            Nothing -> res
+                            Just _ -> []
 
 -- Implement the resolution rules.
-computeResolutions : Node -> List String -> List String -> Board -> List Move
-computeResolutions node stones otherStones board =
+computeResolutions : Node -> List String -> List String -> Board -> Bool -> List Move
+computeResolutions node stones otherStones board hasForced =
     let classifications = classifyNeighbors node board
         nodeName = node.name
         resolutions = (\color pairResolver ->
@@ -1010,12 +1010,16 @@ computeResolutions node stones otherStones board =
                                           classifications
                       )
     in
-        case stones of
-            ["black"] ->
-                resolutions MoveBlack nodePairResolutions
-            ["white"] ->
-                resolutions MoveWhite nodePairResolutions
-            -- below here needs to be FORCED resolutions
+        if not hasForced then
+            case stones of
+                ["black"] ->
+                    resolutions MoveBlack nodePairResolutions
+                ["white"] ->
+                    resolutions MoveWhite nodePairResolutions
+                _ ->
+                    []
+        else
+            case stones of
             ["black", "black"] ->
                 resolutions MoveBlack nodePairForcedResolutions
             ["white", "white"] ->
@@ -1043,21 +1047,25 @@ uniqueMoves moves =
     in
         loop moves []
 
+hasForcedResolutions : Node -> Bool
+hasForcedResolutions node =
+    node.whiteStones > 1 || node.blackStones > 1
+
 computeDisplayList : Board -> RenderInfo -> DisplayList
 computeDisplayList board info =
     let sizes = info.sizes
         sr = toString sizes.stoneRadius
         locs = info.locations
         slocs = info.stoneLocations
-        isBlock : List String -> Bool
-        isBlock = (\stones ->
-                       stones == ["white","black"] || stones == ["black","white"]
-                  )
+        nodes = Dict.toList board |> List.map Tuple.second
+        hasForced = case LE.find hasForcedResolutions nodes of
+                        Nothing -> False
+                        Just _ -> True
         -- TODO: if there are any forced resolutions, don't process unforced.
         drawPile : Node -> Point -> List String -> List String -> StonePile
         drawPile = (\node p stones otherStones ->
                         let resolutions = computeResolutions
-                                          node stones otherStones board
+                                          node stones otherStones board hasForced
                             maybeRes = if resolutions == [] then
                                            Nothing
                                        else
@@ -1093,9 +1101,7 @@ computeDisplayList board info =
                                       , drawPile node sp2 s2 s1
                                       ]
                    )
-        allPiles = Dict.toList board
-                     |> List.map Tuple.second
-                     |> List.concatMap drawNode
+        allPiles = List.concatMap drawNode nodes
         unresolved = List.filter (\pile -> pile.resolutions /= Nothing) allPiles
     in
         { allPiles = allPiles
