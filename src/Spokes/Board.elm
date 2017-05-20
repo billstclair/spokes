@@ -957,26 +957,52 @@ nodePairResolutions nodeName color otherName classification classifications  =
                 _ ->
                     []
         MoveBlock ->
-            case classification of
-                Empty ->
-                    [ Resolution color nodeName otherName ]
-                Blocked ->
-                    []
-                _ ->
-                    case LE.find (\(_,c) -> c == Empty) classifications of
-                        Just _ ->
-                            []
-                        Nothing ->
-                            [ Resolution color nodeName otherName ]
+            []
+
+nodePairForcedResolutions : String -> MovedStone -> String -> NodeClassification -> List (String, NodeClassification) -> List Move
+nodePairForcedResolutions nodeName color otherName classification classifications  =
+    let res = [ Resolution color nodeName otherName ]
+    in
+        case color of
+            MoveWhite ->
+                case classification of
+                    BlackOnly -> res
+                    Empty -> res
+                    Blocked -> []
+                    WhiteOnly ->
+                        case LE.find (\(_, c) -> c==BlackOnly || c==Empty)
+                            classifications
+                        of
+                            Nothing -> []
+                            Just _ -> res
+            MoveBlack ->
+                case classification of
+                    WhiteOnly -> res
+                    Empty -> res
+                    Blocked -> []
+                    BlackOnly ->
+                        case LE.find (\(_, c) -> c==WhiteOnly || c==Empty)
+                            classifications
+                        of
+                            Nothing -> []
+                            Just _ -> res
+            MoveBlock ->
+                case classification of
+                    Empty -> res
+                    Blocked -> []
+                    _ ->
+                        case LE.find (\(_, c) -> c==Empty) classifications of
+                            Nothing -> []
+                            Just _ -> res
 
 -- Implement the resolution rules.
 computeResolutions : Node -> List String -> List String -> Board -> List Move
 computeResolutions node stones otherStones board =
     let classifications = classifyNeighbors node board
         nodeName = node.name
-        resolutions = (\color ->
+        resolutions = (\color pairResolver ->
                            List.concatMap (\(otherName, classification) ->
-                                              nodePairResolutions
+                                              pairResolver
                                                   nodeName color
                                                   otherName classification
                                                   classifications
@@ -986,16 +1012,17 @@ computeResolutions node stones otherStones board =
     in
         case stones of
             ["black"] ->
-                resolutions MoveBlack
+                resolutions MoveBlack nodePairResolutions
             ["white"] ->
-                resolutions MoveWhite
+                resolutions MoveWhite nodePairResolutions
+            -- below here needs to be FORCED resolutions
             ["black", "black"] ->
-                resolutions MoveBlack
+                resolutions MoveBlack nodePairForcedResolutions
             ["white", "white"] ->
-                resolutions MoveWhite
+                resolutions MoveWhite nodePairForcedResolutions
             ["black", "white"] ->
                 if otherStones == ["black", "white"] then
-                    resolutions MoveBlock
+                    resolutions MoveBlock nodePairForcedResolutions
                 else
                     []
             _ ->
@@ -1026,6 +1053,7 @@ computeDisplayList board info =
         isBlock = (\stones ->
                        stones == ["white","black"] || stones == ["black","white"]
                   )
+        -- TODO: if there are any forced resolutions, don't process unforced.
         drawPile : Node -> Point -> List String -> List String -> StonePile
         drawPile = (\node p stones otherStones ->
                         let resolutions = computeResolutions
