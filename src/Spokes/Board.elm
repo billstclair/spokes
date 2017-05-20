@@ -927,6 +927,8 @@ calculateMovesAway nodeName color otherName classifications =
                      Just (_, Just away, sideways) ->
                          if case get away classifications of
                                 Just Empty -> True
+                                Just BlackOnly -> color == MoveWhite
+                                Just WhiteOnly -> color == MoveBlack
                                 _ -> False
                          then
                              [ Resolution color nodeName away ]
@@ -999,6 +1001,21 @@ computeResolutions node stones otherStones board =
             _ ->
                 []
 
+uniqueMoves : List Move -> List Move
+uniqueMoves moves =
+    let loop = (\ms res ->
+                    case ms of
+                        [] ->
+                            List.reverse res
+                        head :: tail ->
+                            if List.member head res then
+                                loop tail res
+                            else
+                                loop tail (head :: res)
+               )
+    in
+        loop moves []
+
 computeDisplayList : Board -> RenderInfo -> DisplayList
 computeDisplayList board info =
     let sizes = info.sizes
@@ -1016,7 +1033,7 @@ computeDisplayList board info =
                             maybeRes = if resolutions == [] then
                                            Nothing
                                        else
-                                           Just resolutions
+                                           Just <| uniqueMoves resolutions
                         in
                             case stones of
                                 [] ->
