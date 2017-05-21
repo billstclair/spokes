@@ -86,10 +86,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         SetPlayers players ->
-            ( { model
-                  | newPlayers = players
-                  , lastFocus = 1
-              }
+            ( { model | newPlayers = players }
             , Cmd.none
             )
         NewGame ->
@@ -147,6 +144,8 @@ update msg model =
                                   | inputs
                                       = Array.set
                                         (model.lastFocus-1) input model.inputs
+                                  , lastFocus
+                                      = (model.lastFocus % model.players) + 1
                               }
                             , Cmd.none
                             )
