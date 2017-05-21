@@ -49,6 +49,7 @@ type alias Model =
     , renderInfo : RenderInfo
     , displayList : DisplayList
     , players : Int
+    , newPlayers : Int
     , turn : Int
     , phase : Phase
     , lastFocus : Int
@@ -67,6 +68,7 @@ initialModel =
     , renderInfo = Board.renderInfo 600
     , displayList = emptyDisplayList
     , players = 2
+    , newPlayers = 2
     , turn = 1
     , phase = Placement
     , lastFocus = 1
@@ -85,11 +87,18 @@ update msg model =
     case msg of
         SetPlayers players ->
             ( { model
-                  | players = players
+                  | newPlayers = players
                   , lastFocus = 1
               }
             , Cmd.none
             )
+        NewGame ->
+            ( { initialModel
+                  | players = model.newPlayers
+                  , newPlayers = model.newPlayers
+              }
+            , Cmd.none
+            )                    
         SetInput player value ->
             ( { model | inputs = Array.set (player-1) value model.inputs }
             , Cmd.none
@@ -259,8 +268,9 @@ view model =
         , p []
             [ Board.render model.selectedPile model.displayList model.renderInfo ]
         , p [] [ b [ text "Players:" ]
-               , radio "players" "2 " (model.players == 2) <| SetPlayers 2
-               , radio "players" "4" (model.players == 4) <| SetPlayers 4
+               , radio "players" "2 " (model.newPlayers == 2) <| SetPlayers 2
+               , radio "players" "4 " (model.newPlayers == 4) <| SetPlayers 4
+               , button [ onClick NewGame ] [ text "New Game" ]
                ]
         , p [] [ a [ href "rules/" ] [ text "Rules" ]
                , br

@@ -22,6 +22,7 @@ import Dict exposing ( Dict )
 
 type Msg
     = SetPlayers Int
+    | NewGame
     | SetInput Int String
     | Place
     | NodeClick String
