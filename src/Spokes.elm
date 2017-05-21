@@ -124,6 +124,7 @@ update msg model =
                         ( { model
                               | board = board
                               , phase = Resolution
+                              , lastFocus = 1
                               , displayList = computeDisplayList
                                               board model.renderInfo
                               , inputs = initialInputs
@@ -133,7 +134,8 @@ update msg model =
         NodeClick nodeName ->
             case model.selectedPile of
                 Nothing ->
-                    if String.all Char.isDigit nodeName then
+                    if (model.phase == Resolution) ||
+                        (String.all Char.isDigit nodeName) then
                         ( model, Cmd.none )
                     else
                         let c = case model.inputColor of
@@ -309,8 +311,11 @@ inputItem player model =
         [ b [ text <| (toString player) ++ ": " ]
         , input [ type_ "text"
                 , onInput <| SetInput player
+                , disabled <| model.phase == Resolution
                 , placeholder
-                      <| if player == model.lastFocus then
+                      <| if player == model.lastFocus &&
+                          model.phase == Placement
+                         then
                              examplePlaceString player
                          else
                              ""
