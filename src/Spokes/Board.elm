@@ -865,6 +865,7 @@ movesAwayDict : Dict String (List (String, Maybe String, List String))
 movesAwayDict =
     Dict.fromList movesAwayList
 
+-- TODO: WhiteWhite, BlackBlack
 classifyNeighbors : Node -> Board -> List (String, NodeClassification)
 classifyNeighbors node board =
     List.map (\name ->
@@ -876,11 +877,16 @@ classifyNeighbors node board =
                             if n.whiteStones == 0 then
                                 if n.blackStones == 0 then
                                     Empty
-                                else
+                                else if n.blackStones == 1 then
                                     BlackOnly
+                                else
+                                    BlackBlack
                             else
                                 if n.blackStones == 0 then
-                                    WhiteOnly
+                                    if n.whiteStones == 1 then
+                                        WhiteOnly
+                                    else
+                                        WhiteWhite
                                 else
                                     Blocked
                   )
@@ -969,7 +975,7 @@ nodePairForcedResolutions nodeName color otherName classification classification
                     BlackOnly -> res
                     Empty -> res
                     Blocked -> []
-                    WhiteOnly ->
+                    _ ->        --WhiteOnly, WhiteWhite, BlackBlack
                         case LE.find (\(_, c) -> c==BlackOnly || c==Empty)
                             classifications
                         of
@@ -980,7 +986,7 @@ nodePairForcedResolutions nodeName color otherName classification classification
                     WhiteOnly -> res
                     Empty -> res
                     Blocked -> []
-                    BlackOnly ->
+                    _ ->        --BlackOnly, WhiteWhite, BlackBlack
                         case LE.find (\(_, c) -> c==WhiteOnly || c==Empty)
                             classifications
                         of

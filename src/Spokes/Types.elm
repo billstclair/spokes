@@ -70,6 +70,8 @@ type NodeClassification
     = Empty
     | BlackOnly
     | WhiteOnly
+    | WhiteWhite
+    | BlackBlack
     | Blocked
 
 type Move
