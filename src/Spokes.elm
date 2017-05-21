@@ -268,7 +268,7 @@ view model =
             ]
         , p []
             [ Board.render model.selectedPile model.displayList model.renderInfo ]
-        , p [] [ b [ text "Players:" ]
+        , p [] [ b [ text "Players: " ]
                , radio "players" "2 " (model.newPlayers == 2) <| SetPlayers 2
                , radio "players" "4 " (model.newPlayers == 4) <| SetPlayers 4
                , button [ onClick NewGame ] [ text "New Game" ]
