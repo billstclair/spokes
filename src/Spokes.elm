@@ -11,11 +11,12 @@
 
 module Spokes exposing (..)
 
-import Spokes.Types as Types exposing ( Board, RenderInfo, Move
+import Spokes.Types as Types exposing ( Msg(..), Board, RenderInfo, Move
                                       , DisplayList, emptyDisplayList
+                                      , StonePile, Color(..)
                                       )
 import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
-                                      , computeDisplayList
+                                      , computeDisplayList, findResolution
                                       )
 
 import Html exposing ( Html, Attribute
@@ -26,8 +27,9 @@ import Html.Attributes exposing ( value, size, maxlength, href, src, title
                                 , alt, style, selected, type_, name, checked
                                 , placeholder, disabled
                                 )
-import Html.Events exposing ( onClick, onInput, on, keyCode )
+import Html.Events exposing ( onClick, onInput, onFocus )
 import Array exposing ( Array )
+import Char
 import Debug exposing ( log )
 
 main =
@@ -49,8 +51,11 @@ type alias Model =
     , players : Int
     , turn : Int
     , phase : Phase
+    , lastFocus : Int
+    , inputColor : Color
     , inputs : Array String
     , resolver : Int
+    , selectedPile : Maybe StonePile
     }
 
 initialInputs : Array String
@@ -64,28 +69,37 @@ initialModel =
     , players = 2
     , turn = 1
     , phase = Placement
+    , lastFocus = 1
+    , inputColor = White
     , inputs = initialInputs
     , resolver = 1
+    , selectedPile = Nothing
     }
 
 init : ( Model, Cmd Msg )
 init =
     ( initialModel, Cmd.none )
 
-type Msg
-    = SetPlayers Int
-    | SetInput Int String
-    | Place
-
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         SetPlayers players ->
-            ( { model | players = players }
+            ( { model
+                  | players = players
+                  , lastFocus = 1
+              }
             , Cmd.none
             )
         SetInput player value ->
             ( { model | inputs = Array.set (player-1) value model.inputs }
+            , Cmd.none
+            )
+        Focus player ->
+            ( { model | lastFocus = player }
+            , Cmd.none
+            )
+        SetInputColor color ->
+            ( { model | inputColor = color }
             , Cmd.none
             )
         Place ->
@@ -100,13 +114,75 @@ update msg model =
                     in
                         ( { model
                               | board = board
-                              , displayList = log "computeDisplaylist" <|
-                                              computeDisplayList
+                              , phase = Resolution
+                              , displayList = computeDisplayList
                                               board model.renderInfo
                               , inputs = initialInputs
                           }
                           , Cmd.none
                         )
+        NodeClick nodeName ->
+            case model.selectedPile of
+                Nothing ->
+                    if String.all Char.isDigit nodeName then
+                        ( model, Cmd.none )
+                    else
+                        let c = case model.inputColor of
+                                    White -> "W"
+                                    Black -> "B"
+                            input = c ++ nodeName
+                        in
+                            ( { model
+                                  | inputs
+                                      = Array.set
+                                        (model.lastFocus-1) input model.inputs
+                              }
+                            , Cmd.none
+                            )
+                Just pile ->
+                    maybeMakeMove nodeName pile model
+        PileClick pile ->
+            case model.selectedPile of
+                Nothing ->
+                    case pile.resolutions of
+                        Nothing ->
+                            ( model, Cmd.none )
+                        Just _ ->
+                            ( { model | selectedPile = Just pile }
+                            , Cmd.none
+                            )
+                Just p ->
+                    if p == pile then
+                        ( { model | selectedPile = Nothing }
+                        , Cmd.none
+                        )
+                    else
+                        maybeMakeMove pile.nodeName p model
+
+maybeMakeMove : String -> StonePile -> Model -> ( Model, Cmd Msg )
+maybeMakeMove nodeName pile model =
+    case findResolution nodeName pile of
+        Nothing ->
+            ( model, Cmd.none )
+        Just move ->
+            let board = makeMove move model.board
+                displayList = computeDisplayList board model.renderInfo
+                resolved = displayList.unresolvedPiles == []
+                resolver = if resolved then
+                               (model.resolver % model.players) + 1
+                           else
+                               model.resolver
+                phase = if resolved then Placement else Resolution
+            in
+                ( { model
+                      | board = board
+                      , displayList = displayList
+                      , selectedPile = Nothing
+                      , resolver = resolver
+                      , phase = phase
+                  }
+                , Cmd.none
+                )
 
 br : Html Msg
 br =
@@ -161,7 +237,7 @@ placementLine model =
 
 resolutionLine : Model -> Html Msg
 resolutionLine model =
-    text ""
+    text <| "Player " ++ (toString model.resolver) ++ " please resolve."
 
 view : Model -> Html Msg
 view model =
@@ -174,7 +250,14 @@ view model =
                   Resolution -> resolutionLine model
             ]
         , p []
-            [ Board.render model.displayList model.renderInfo ]
+            [ b [ text "Position Click Color: " ]
+            , radio "color" "white " (model.inputColor == White)
+                  <| SetInputColor White
+            , radio "players" "black" (model.inputColor == Black)
+                <| SetInputColor Black
+            ]
+        , p []
+            [ Board.render model.selectedPile model.displayList model.renderInfo ]
         , p [] [ b [ text "Players:" ]
                , radio "players" "2 " (model.players == 2) <| SetPlayers 2
                , radio "players" "4" (model.players == 4) <| SetPlayers 4
@@ -216,9 +299,14 @@ inputItem player model =
         [ b [ text <| (toString player) ++ ": " ]
         , input [ type_ "text"
                 , onInput <| SetInput player
-                , placeholder <| examplePlaceString player
+                , placeholder
+                      <| if player == model.lastFocus then
+                             examplePlaceString player
+                         else
+                             ""
                 , size 5
                 , value (Maybe.withDefault "" <| Array.get (player-1) model.inputs)
+                , onFocus <| Focus player
                 ]
               []
         , text " "

@@ -12,10 +12,10 @@
 module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , parseNodeName, count
                              , isLegalMove, isLegalPlacement, makeMove
-                             , computeDisplayList
+                             , computeDisplayList, findResolution
                              )
 
-import Spokes.Types as Types exposing ( Board, Node
+import Spokes.Types as Types exposing ( Msg(..), Board, Node
                                       , Point, Sizes, RenderInfo
                                       , Color(..), Move (..), MovedStone(..)
                                       , NodeClassification(..)
@@ -30,8 +30,9 @@ import Svg.Attributes exposing ( x, y, width, height
                                , cx, cy, r
                                , x1, y1, x2, y2
                                , fill, stroke, strokeWidth, fontSize, transform
-                               , fillOpacity, textAnchor, dominantBaseline
+                               , fillOpacity, opacity, textAnchor, dominantBaseline
                                )
+import Svg.Events exposing ( onClick )
 import String
 import List.Extra as LE
 import Debug exposing ( log )
@@ -216,8 +217,8 @@ circle center radius =
     Svg.circle [ cx center, cy center, r radius ]
         []
 
-render : DisplayList -> RenderInfo -> Html msg
-render list info =
+render : Maybe StonePile -> DisplayList -> RenderInfo -> Html Msg
+render selectedPile list info =
     let sizes = info.sizes
         indent = 20
         is = toString indent
@@ -241,35 +242,86 @@ render list info =
                         , circle c rc
                         , circle c rd
                         ]
-                      , renderPoints info
                       , renderLines info
-                      , renderStones list info
+                      , renderPoints selectedPile info
+                      , renderStones selectedPile list info
                       ]
             ]
 
-renderPoints : RenderInfo -> List (Svg msg)
-renderPoints info =
+needsResolutionColor : String
+needsResolutionColor =
+    "red"
+
+sourceColor : String
+sourceColor =
+    "orange"
+
+targetColor : String
+targetColor =
+    "green"
+
+isNodeInPileResolutions : String -> Maybe StonePile -> Bool
+isNodeInPileResolutions nodeName selectedPile =
+    case selectedPile of
+        Nothing ->
+            False
+        Just pile ->
+            case findResolution nodeName pile of
+                Nothing ->
+                    False
+                Just _ ->
+                    True
+
+findResolution : String -> StonePile -> Maybe Move
+findResolution nodeName pile =
+    case pile.resolutions of
+        Nothing ->
+            Nothing
+        Just res ->
+            case LE.find (\r ->
+                              case r of
+                                  Resolution _ _ n ->
+                                      if n == nodeName then
+                                          True
+                                      else
+                                          False
+                                  _ ->
+                                      False
+                         )
+                         res
+            of
+                Just move ->
+                    Just move
+                Nothing ->
+                    Nothing
+                                          
+pileStrokeWidth : String
+pileStrokeWidth =
+    "3"
+
+renderPoints : Maybe StonePile -> RenderInfo -> List (Svg Msg)
+renderPoints selectedPile info =
     let sizes = info.sizes
         sr = toString sizes.stoneRadius
-        draw = (\p ->
+        draw = (\(c, p) ->
                     let x = toString p.x
                         y = toString p.y
+                        op = if isNodeInPileResolutions c selectedPile then
+                                 "1"
+                             else
+                                 "0"
                     in
-                        Svg.circle [cx x, cy y, r "5", fillOpacity "1"] []
+                        [ Svg.circle [cx x, cy y, r "5", fillOpacity "1"] []
+                        , Svg.circle
+                            [cx x, cy y, r sr, fillOpacity "0"
+                            , opacity op
+                            , stroke targetColor
+                            , strokeWidth pileStrokeWidth
+                            , onClick <| NodeClick c
+                            ]
+                            []
+                        ]
                )
-        drawStone = (\p color ->
-                         let x = toString p.x
-                             y = toString p.y
-                         in
-                             Svg.circle [ cx x, cy y, r sr
-                                        , fillOpacity "1"
-                                        , fill color
-                                        ]
-                                 []
-                    )
-        drawStones = (\(p1, p2) -> [ drawStone p1 "white"
-                                   , drawStone p2 "black"
-                                   ])
         drawText = (\(c, p) ->
                      Svg.text_
                          [ x <| toString p.x
@@ -282,27 +334,20 @@ renderPoints info =
     in
         List.concat
             [ Dict.toList info.locations
-              |> List.map Tuple.second
-              |> List.map draw
+              |> List.concatMap draw
             , Dict.toList info.textLocations
               |> List.map drawText
-            , if debugStoneLocations then
-                  Dict.toList info.stoneLocations
-                    |> List.map Tuple.second
-                    |> List.concatMap drawStones
-              else
-                  []
             ]
 
-renderStones : DisplayList -> RenderInfo -> List (Svg msg)
-renderStones list info =
+renderStones : Maybe StonePile -> DisplayList -> RenderInfo -> List (Svg Msg)
+renderStones selectedPile list info =
     let sizes = info.sizes
         sr = toString sizes.stoneRadius
         locs = info.locations
         slocs = info.stoneLocations
         delta = 10
-        drawStone : Int -> Int -> String -> Maybe String -> Svg msg
-        drawStone = (\x y color outline ->
+        drawStone : Int -> Int -> String -> Maybe String -> Msg -> Svg Msg
+        drawStone = (\x y color outline msg ->
                          Svg.circle [ cx (toString x)
                                     , cy (toString y)
                                     , r sr
@@ -310,33 +355,44 @@ renderStones list info =
                                     , fill color
                                     , stroke
                                           <| Maybe.withDefault "darkgray" outline
+                                    , strokeWidth pileStrokeWidth
+                                    , onClick msg
                                     ]
                              []
                     )
-        drawPile : StonePile -> List (Svg msg)
+        drawPile : StonePile -> List (Svg Msg)
         drawPile = (\pile ->
-                        let outline = if pile.resolutions == Nothing then
-                                          Nothing
-                                      else
-                                          Just "red"
+                        let outline = case selectedPile of
+                                          Nothing ->
+                                              if pile.resolutions == Nothing then
+                                                  Nothing
+                                              else
+                                                  Just needsResolutionColor
+                                          Just sp ->
+                                              if sp == pile then
+                                                  Just sourceColor
+                                              else if isNodeInPileResolutions
+                                                        pile.nodeName
+                                                        selectedPile
+                                                   then
+                                                       Just targetColor
+                                                   else
+                                                       Nothing
                             p = pile.location
+                            msg = PileClick pile
                         in
                             case pile.colors of
                                 [] ->
                                     []
                                 [ stone ] ->
-                                    [ drawStone p.x p.y stone outline ]
+                                    [ drawStone p.x p.y stone outline msg ]
                                 s1 :: s2 :: _ ->
-                                    [ drawStone p.x (p.y + delta) s1 outline
-                                    , drawStone p.x p.y s2 outline
+                                    [ drawStone p.x (p.y + delta) s1 outline msg
+                                    , drawStone p.x p.y s2 outline msg
                                     ]
                    )
     in
         List.concatMap drawPile list.allPiles
-
-debugStoneLocations : Bool
-debugStoneLocations =
-    False
 
 inBiggerCircle : String -> String -> Bool
 inBiggerCircle c1 c2 =
@@ -627,6 +683,27 @@ isLegalPlacement string board =
             else
                 Err <| "Not legal move: " ++ string
 
+deltaStones : Color -> Int -> Node -> Node
+deltaStones color delta node =
+    case color of
+        White ->
+            { node | whiteStones = node.whiteStones + delta }
+        Black ->
+            { node | blackStones = node.blackStones + delta }
+
+moveStones : MovedStone -> Int -> Node -> Node
+moveStones moved delta node =
+    case moved of
+        MoveWhite ->
+            { node | whiteStones = node.whiteStones + delta }
+        MoveBlack ->
+            { node | blackStones = node.blackStones + delta }
+        MoveBlock ->
+            { node
+                | whiteStones = node.whiteStones + delta
+                , blackStones = node.blackStones + delta
+            }
+
 makeMove : Move -> Board -> Board
 makeMove move board =
     case move of
@@ -635,18 +712,24 @@ makeMove move board =
                 Nothing ->
                     board
                 Just node ->
-                    let n = case color of
-                                White -> { node
-                                             | whiteStones = node.whiteStones + 1
-                                         }
-                                Black -> { node
-                                             | blackStones = node.blackStones + 1
-                                         }
+                    let n = deltaStones color 1 node
                     in
                         setNode nodeName n board
-        Resolution color from to ->
-            -- TODO
-            board
+        Resolution moved from to ->
+            case getNode from board of
+                Nothing ->
+                    board
+                Just fromNode ->
+                    case getNode to board of
+                        Nothing ->
+                            board
+                        Just toNode ->
+                            let fn = moveStones moved -1 fromNode
+                                tn = moveStones moved 1 toNode
+                            in
+                                setNode from fn
+                                    <| setNode to tn board
+                            
 
 partitionStones : Int -> Int -> List (List String)
 partitionStones black white =
@@ -857,6 +940,86 @@ movesAwayList =
     , ("D16", [ ("16", Nothing, ["D15", "D1"])
              , ("D15", Just "D1", ["16"])
              , ("D1", Just "D15", ["16"])
+             ]
+      )
+    , ("1", [ ("D1", Nothing, ["A", "B"])
+            , ("A", Just "B", ["D1"])
+            , ("B", Just "A", ["D1"])
+             ]
+      )
+    , ("2", [ ("D2", Nothing, ["1", "3"])
+            , ("1", Just "3", ["D2"])
+            , ("3", Just "1", ["D2"])
+             ]
+      )
+    , ("3", [ ("D3", Nothing, ["2", "4"])
+            , ("2", Just "4", ["D3"])
+            , ("4", Just "2", ["D3"])
+             ]
+      )
+    , ("4", [ ("D4", Nothing, ["3", "5"])
+            , ("3", Just "5", ["D4"])
+            , ("5", Just "3", ["D4"])
+             ]
+      )
+    , ("5", [ ("D5", Nothing, ["4", "6"])
+            , ("4", Just "6", ["D5"])
+            , ("6", Just "4", ["D5"])
+             ]
+      )
+    , ("6", [ ("D6", Nothing, ["5", "7"])
+            , ("5", Just "7", ["D6"])
+            , ("7", Just "5", ["D6"])
+             ]
+      )
+    , ("7", [ ("D7", Nothing, ["6", "8"])
+            , ("6", Just "8", ["D7"])
+            , ("8", Just "6", ["D7"])
+             ]
+      )
+    , ("8", [ ("D8", Nothing, ["7", "9"])
+            , ("7", Just "9", ["D8"])
+            , ("9", Just "7", ["D8"])
+             ]
+      )
+    , ("9", [ ("D9", Nothing, ["8", "10"])
+            , ("8", Just "10", ["D9"])
+            , ("10", Just "8", ["D9"])
+             ]
+      )
+    , ("10", [ ("D10", Nothing, ["9", "11"])
+             , ("9", Just "11", ["D10"])
+             , ("11", Just "9", ["D10"])
+             ]
+      )
+    , ("11", [ ("D11", Nothing, ["10", "12"])
+             , ("10", Just "12", ["D11"])
+             , ("12", Just "10", ["D11"])
+             ]
+      )
+    , ("12", [ ("D12", Nothing, ["11", "13"])
+             , ("11", Just "13", ["D12"])
+             , ("13", Just "11", ["D12"])
+             ]
+      )
+    , ("13", [ ("D13", Nothing, ["12", "14"])
+             , ("12", Just "14", ["D13"])
+             , ("14", Just "12", ["D13"])
+             ]
+      )
+    , ("14", [ ("D14", Nothing, ["13", "15"])
+             , ("13", Just "15", ["D14"])
+             , ("15", Just "13", ["D14"])
+             ]
+      )
+    , ("15", [ ("D15", Nothing, ["14", "16"])
+             , ("14", Just "16", ["D15"])
+             , ("16", Just "14", ["D15"])
+             ]
+      )
+    , ("16", [ ("D16", Nothing, ["15", "1"])
+             , ("15", Just "1", ["D16"])
+             , ("1", Just "15", ["D16"])
              ]
       )
     ]

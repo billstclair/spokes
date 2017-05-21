@@ -9,7 +9,7 @@
 --
 ----------------------------------------------------------------------
 
-module Spokes.Types exposing ( Board, Node
+module Spokes.Types exposing ( Msg(..), Board, Node
                              , Point, Sizes, RenderInfo
                              , Color(..), MovedStone(..), NodeClassification(..)
                              , Move(..), History
@@ -19,6 +19,15 @@ module Spokes.Types exposing ( Board, Node
                              )
 
 import Dict exposing ( Dict )
+
+type Msg
+    = SetPlayers Int
+    | SetInput Int String
+    | Place
+    | NodeClick String
+    | PileClick StonePile
+    | Focus Int
+    | SetInputColor Color
 
 type alias Board =
     Dict String Node
