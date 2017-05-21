@@ -117,10 +117,14 @@ update msg model =
                                 (\move b -> makeMove move b)
                                 model.board
                                 moves
+                        displayList = computeDisplayList
+                                      board model.renderInfo
+                        (resolver, phase) = resolution displayList model
                     in
                         ( { model
                               | board = board
-                              , phase = Resolution
+                              , resolver = resolver
+                              , phase = phase
                               , lastFocus = 1
                               , displayList = computeDisplayList
                                               board model.renderInfo
@@ -169,6 +173,17 @@ update msg model =
                     else
                         maybeMakeMove pile.nodeName p model
 
+resolution : DisplayList -> Model -> (Int, Phase)
+resolution displayList model =
+    let resolved = displayList.unresolvedPiles == []
+        resolver = if resolved then
+                       (model.resolver % model.players) + 1
+                   else
+                       model.resolver
+        phase = if resolved then Placement else Resolution
+    in
+        (resolver, phase)
+
 maybeMakeMove : String -> StonePile -> Model -> ( Model, Cmd Msg )
 maybeMakeMove nodeName pile model =
     case findResolution nodeName pile of
@@ -177,12 +192,7 @@ maybeMakeMove nodeName pile model =
         Just move ->
             let board = makeMove move model.board
                 displayList = computeDisplayList board model.renderInfo
-                resolved = displayList.unresolvedPiles == []
-                resolver = if resolved then
-                               (model.resolver % model.players) + 1
-                           else
-                               model.resolver
-                phase = if resolved then Placement else Resolution
+                (resolver, phase) = resolution displayList model
             in
                 ( { model
                       | board = board
