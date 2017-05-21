@@ -250,7 +250,7 @@ view model =
                   Resolution -> resolutionLine model
             ]
         , p []
-            [ b [ text "Position Click Color: " ]
+            [ b [ text "Placement Click Color: " ]
             , radio "color" "white " (model.inputColor == White)
                   <| SetInputColor White
             , radio "players" "black" (model.inputColor == Black)
