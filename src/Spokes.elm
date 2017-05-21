@@ -126,8 +126,7 @@ update msg model =
                               , resolver = resolver
                               , phase = phase
                               , lastFocus = 1
-                              , displayList = computeDisplayList
-                                              board model.renderInfo
+                              , displayList = displayList
                               , inputs = initialInputs
                           }
                           , Cmd.none
