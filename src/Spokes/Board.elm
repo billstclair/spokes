@@ -222,15 +222,16 @@ render selectedPile list info =
     let sizes = info.sizes
         indent = 20
         is = toString indent
-        w = toString (sizes.diameter + indent + indent)
-        d = toString sizes.diameter
+        iw = sizes.diameter + indent + indent
+        w = toString (iw)
+        h = toString (iw+10)
         c = toString sizes.center
         r = toString sizes.radius
         rb = toString sizes.bRadius
         rc = toString sizes.cRadius
         rd = toString sizes.dRadius
     in
-        svg [ width w, height w ]
+        svg [ width w, height h ]
             [ g [ transform <| "translate("++is++","++is++")"
                 , stroke "black"
                 , strokeWidth "2"
@@ -339,13 +340,17 @@ renderPoints selectedPile info =
               |> List.map drawText
             ]
 
+lowerStoneYDelta : Int
+lowerStoneYDelta =
+    10
+
 renderStones : Maybe StonePile -> DisplayList -> RenderInfo -> List (Svg Msg)
 renderStones selectedPile list info =
     let sizes = info.sizes
         sr = toString sizes.stoneRadius
         locs = info.locations
         slocs = info.stoneLocations
-        delta = 10
+        delta = lowerStoneYDelta
         drawStone : Int -> Int -> String -> Maybe String -> Msg -> Svg Msg
         drawStone = (\x y color outline msg ->
                          Svg.circle [ cx (toString x)
@@ -780,10 +785,10 @@ partitionStones black white =
 
 movesAwayList : List (String, List (String, Maybe String, List String))
 movesAwayList =
-    [ ("A1", [ ("B1",  Just "B3", [])
-             , ("B2",  Just "B4", [])
-             , ("B3",  Just "B1", [])
-             , ("B4",  Just "B2", [])
+    [ ("A1", [ ("B1",  Just "B3", ["B2", "B4"])
+             , ("B2",  Just "B4", ["B1", "B3"])
+             , ("B3",  Just "B1", ["B2", "B4"])
+             , ("B4",  Just "B2", ["B1", "B3"])
              ]
       )
     , ("B1", [ ("C1", Just "A1", ["B2", "B4"])
