@@ -256,7 +256,10 @@ placementLine model =
 
 resolutionLine : Model -> Html Msg
 resolutionLine model =
-    text <| "Player " ++ (toString model.resolver) ++ " please resolve."
+    span []
+        [ text <| "Player " ++ (toString model.resolver) ++ " please resolve. "
+        , button [ disabled True ] [ text "Place" ]
+        ]
 
 view : Model -> Html Msg
 view model =
