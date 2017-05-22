@@ -1,0 +1,43 @@
+<html>
+<head>
+<title>Spokes - A Board Game</title>
+</head>
+<body>
+<h2 style='text-align: center;'>Spokes - A Board Game</h2>
+<p style='text-align: center;'>
+  Invented by Chris St. Clair<br/>
+  Help page by Bill St. Clair
+</p>
+
+<h3>Game Play</h3>
+
+<p>The game starts in two-player mode. To start a new game, select "2" or "4" for "Players" near the bottom of the page, and click the "New Game" button.</p>
+
+<h3>Placement Phase</h3>
+
+<p>Each turn begins with the Placement phase. Fill in each of the numbered boxes near the top of the page with a color and node name, e.g. "wb1" to put a white stone on node "B1". You can also choose "white" or "black" for the "Placement Click Color", and click on the node. The selected input box will advance after you click.</p>
+
+<p>When you've filled in all the input boxes with valid colors for empty nodes, the "Place" button will become enabled, and you can click it to place the stones.</p>
+
+<h3>Resolution Phase</h3>
+
+<p>If there are resolutions to be made, those stones will be outlined in <span style='font-weight: bold; color: red;'>red</span>. If there are not, play will proceed with placement for the next turn.</p>
+
+<p>To make a resolution, click on one of the red-outlined stones. It's outline will be changed to <span style='font-weight: bold; color: orange;'>orange</span>, and the places it can move will be outlined in <span style='font-weight: bold; color: green;'>green</span>. Click on one of the green-outlined locations to make the move. Click on the orange-outlined selected stone to cancel the selection. Continue until there are no longer any red-outlined stones, and the game switches to placement phase for the next turn.</p>
+
+<p>I have not yet implemented detection of the end of the game. Do that yourself for now.</p>
+
+<h3>Scoring</h3>
+
+<p>The numbers in parentheses next to the input boxes are the score for each player. The first number is the number of stones in the (outer) home circle for that player's region. The second number is the total number of stones in that player's region (only relevant if there is a tie in the home circle).</p>
+
+<h3>Source Code</h3>
+
+<p>Clicking the "GitHub" link near the bottom of the page will open the source code repository in a new browser tab/window.</p>
+
+<h3>TODO</h3>
+
+<p>I plan to soon add a history display and an undo button. Then I'll create a server to enable multi-player games over the internet.</p>
+
+</body>
+</html>

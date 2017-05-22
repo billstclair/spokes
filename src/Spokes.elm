@@ -11,7 +11,7 @@
 
 module Spokes exposing (..)
 
-import Spokes.Types as Types exposing ( Msg(..), Board, RenderInfo, Move
+import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo, Move
                                       , DisplayList, emptyDisplayList
                                       , StonePile, Color(..)
                                       )
@@ -25,7 +25,8 @@ import Html exposing ( Html, Attribute
                      )
 import Html.Attributes exposing ( value, size, maxlength, href, src, title
                                 , alt, style, selected, type_, name, checked
-                                , placeholder, disabled
+                                , placeholder, disabled, target
+                                , width, height
                                 )
 import Html.Events exposing ( onClick, onInput, onFocus )
 import Array exposing ( Array )
@@ -45,7 +46,8 @@ type Phase
     | Resolution
 
 type alias Model =
-    { board : Board
+    { page : Page
+    , board : Board
     , renderInfo : RenderInfo
     , displayList : DisplayList
     , players : Int
@@ -64,7 +66,8 @@ initialInputs = Array.repeat 4 ""
 
 initialModel : Model
 initialModel =
-    { board = Board.initialBoard
+    { page = GamePage
+    , board = Board.initialBoard
     , renderInfo = Board.renderInfo 600
     , displayList = emptyDisplayList
     , players = 2
@@ -85,6 +88,10 @@ init =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        SetPage page ->
+            ( { model | page = page }
+            , Cmd.none
+            )
         SetPlayers players ->
             ( { model | newPlayers = players }
             , Cmd.none
@@ -261,11 +268,45 @@ resolutionLine model =
         , button [ disabled True ] [ text "Place" ]
         ]
 
-view : Model -> Html Msg
-view model =
-    center []
-        [ h2 [] [ text "Spokes" ]
-        , inputItems model
+playButton : Html Msg
+playButton =
+    p []
+        [ button [ onClick <| SetPage GamePage
+                 , style [("font-size", "150%")]
+                 ]
+              [ text "Play" ]
+        ]
+
+iframe : String -> Html Msg
+iframe url =
+    Html.iframe [ style [ ("width", "40em")
+                        , ("height", "40em")
+                        ]
+                , src url
+                ]
+        []
+
+renderIframePage : String -> String -> Html Msg
+renderIframePage title url =
+    div []
+        [ h3 [] [ text title ]
+        , playButton
+        , iframe url
+        , playButton
+        ]
+
+renderRulesPage : Html Msg
+renderRulesPage =
+    renderIframePage "Rules" "docs/rules.html"
+
+renderHelpPage : Html Msg
+renderHelpPage =
+    renderIframePage "Help" "docs/help.html"
+
+renderGamePage : Model -> Html Msg
+renderGamePage model =
+    div []
+        [ inputItems model
         , p []
             [ case model.phase of
                   Placement -> placementLine model
@@ -285,14 +326,54 @@ view model =
                , radio "players" "4 " (model.newPlayers == 4) <| SetPlayers 4
                , button [ onClick NewGame ] [ text "New Game" ]
                ]
-        , p [] [ a [ href "rules/" ] [ text "Rules" ]
+        ]
+
+pages : List (Page, String)
+pages =
+    [ ( HelpPage, "Help" )
+    , ( RulesPage, "Rules" )
+    ]
+
+pageLink : Page -> (Page, String) -> Html Msg
+pageLink currentPage (page, label) =
+    span []
+        [ text " "
+        , if currentPage == page then
+              text label
+          else
+              a [ href "#", onClick <| SetPage page ]
+                  [ text label ]
+        ]
+
+pageLinks : Page -> Html Msg
+pageLinks currentPage =
+    span []
+        <| List.map (pageLink currentPage) pages
+
+view : Model -> Html Msg
+view model =
+    center []
+        [ h2 [] [ text "Spokes" ]
+        , case model.page of
+              GamePage ->
+                  renderGamePage model
+              RulesPage ->
+                  renderRulesPage
+              HelpPage ->
+                  renderHelpPage
+        , p [] [ pageLinks model.page
                , br
-               , a [ href "https://github.com/billstclair/spokes" ]
+               , a [ href "https://github.com/billstclair/spokes"
+                   , target "_blank"
+                   ]
                    [ text "GitHub" ]
                ]
         , p [] [ text "Invented by Chris St. Clair"
                , br
                , text "Coded by Bill St. Clair"
+               , br
+               , text "Made with "
+               , a [ href "http://elm-lang.org/" ] [ text "Elm" ]
                ]
         ]
 
