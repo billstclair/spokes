@@ -373,7 +373,10 @@ view model =
                , text "Coded by Bill St. Clair"
                , br
                , text "Made with "
-               , a [ href "http://elm-lang.org/" ] [ text "Elm" ]
+               , a [ href "http://elm-lang.org/"
+                   , target "_blank"
+                   ]
+                   [ text "Elm" ]
                ]
         ]
 
