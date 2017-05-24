@@ -22,7 +22,7 @@ import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
 
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
-                     , input, table, tr, td, button
+                     , input, table, tr, th, td, button
                      )
 import Html.Attributes exposing ( value, size, maxlength, href, src, title
                                 , alt, style, selected, type_, name, checked
@@ -422,7 +422,53 @@ view model =
                    ]
                    [ text "Elm" ]
                ]
+        , if model.page == GamePage then
+              historyDiv model
+          else
+              text ""
         ]
+
+historyDiv : Model -> Html Msg
+historyDiv model =
+    table []
+        <| (tr []
+                [ th [] [ text "Turn #" ]
+                , th [] [ text "Resolver" ]
+                , th [] [ text "Details" ]
+                ]
+           ) :: (List.map turnRow model.history)
+
+turnRow : Turn -> Html Msg
+turnRow turn =
+    tr []
+        [ td [] [ text <| toString turn.number ]
+        , td [] [ text <| toString turn.resolver ]
+        , td [] [ p []
+                      [ b [ text "Placement:" ]
+                      , br
+                      , text <| placementsHistoryText turn.placements
+                      ]
+                , case turn.resolutions of
+                      [] ->
+                          text ""
+                      resolutions ->
+                          p []
+                              (( b [ text "Resolutions: " ] )
+                              :: ( List.concatMap renderResolution resolutions )
+                              )
+                ]
+        ]
+    
+placementsHistoryText : List Move -> String
+placementsHistoryText moves =
+    toString moves
+
+renderResolution : Move -> List (Html Msg)
+renderResolution move =
+    [ br
+    , text <| toString move
+    ]
+
 
 isEven : Int -> Bool
 isEven int =
