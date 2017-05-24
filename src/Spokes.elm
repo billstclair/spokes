@@ -14,6 +14,7 @@ module Spokes exposing (..)
 import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo, Move
                                       , DisplayList, emptyDisplayList
                                       , StonePile, Color(..)
+                                      , Turn, History
                                       )
 import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , computeDisplayList, findResolution
@@ -47,6 +48,7 @@ type Phase
 
 type alias Model =
     { page : Page
+    , history : History
     , board : Board
     , renderInfo : RenderInfo
     , displayList : DisplayList
@@ -64,9 +66,18 @@ type alias Model =
 initialInputs : Array String
 initialInputs = Array.repeat 4 ""
 
+newTurn : Int -> Int -> Turn
+newTurn number resolver =
+    { number = number
+    , resolver = resolver
+    , placements = []
+    , resolutions = []
+    }
+
 initialModel : Model
 initialModel =
     { page = GamePage
+    , history = [ newTurn 1 1 ]
     , board = Board.initialBoard
     , renderInfo = Board.renderInfo 600
     , displayList = emptyDisplayList
@@ -124,12 +135,23 @@ update msg model =
                                 (\move b -> makeMove move b)
                                 model.board
                                 moves
+                        his = case model.history of
+                                  [] ->
+                                      -- won't happen
+                                      let turn = newTurn 1 1
+                                      in
+                                          [{ turn | placements = moves}]
+                                  turn :: tail ->
+                                      { turn | placements = moves }
+                                      :: tail
                         displayList = computeDisplayList
                                       board model.renderInfo
-                        (resolver, phase) = resolution displayList model
+                        (resolver, phase, history)
+                            = resolution Nothing displayList model his
                     in
                         ( { model
-                              | board = board
+                              | history = history
+                              , board = board
                               , resolver = resolver
                               , phase = phase
                               , lastFocus = 1
@@ -179,16 +201,36 @@ update msg model =
                     else
                         maybeMakeMove pile.nodeName p model
 
-resolution : DisplayList -> Model -> (Int, Phase)
-resolution displayList model =
+resolution : Maybe Move -> DisplayList -> Model -> History -> (Int, Phase, History)
+resolution maybeMove displayList model history =
     let resolved = displayList.unresolvedPiles == []
         resolver = if resolved then
                        (model.resolver % model.players) + 1
                    else
                        model.resolver
         phase = if resolved then Placement else Resolution
+        his = case history of
+                  [] ->
+                      []    --can't happen
+                  turn :: tail ->
+                      let t2 = case maybeMove of
+                                   Nothing ->
+                                       turn
+                                   Just move ->
+                                       { turn
+                                           | resolutions
+                                             = List.append
+                                             turn.resolutions
+                                             [ move ]
+                                       }
+                          his2 = t2 :: tail
+                      in
+                          if resolved then
+                              (newTurn (turn.number + 1) resolver) :: his2
+                          else
+                              his2
     in
-        (resolver, phase)
+        (resolver, phase, log "history" his)
 
 maybeMakeMove : String -> StonePile -> Model -> ( Model, Cmd Msg )
 maybeMakeMove nodeName pile model =
@@ -198,10 +240,12 @@ maybeMakeMove nodeName pile model =
         Just move ->
             let board = makeMove move model.board
                 displayList = computeDisplayList board model.renderInfo
-                (resolver, phase) = resolution displayList model
+                (resolver, phase, history) =
+                    resolution (Just move) displayList model model.history
             in
                 ( { model
-                      | board = board
+                      | history = history
+                      , board = board
                       , displayList = displayList
                       , selectedPile = Nothing
                       , resolver = resolver
@@ -228,7 +272,7 @@ getPlacements model =
         board = model.board
         loop = (\idx res ->
                     if idx < 0 then
-                        Just <| List.reverse res
+                        Just res
                     else
                         case Array.get idx inputs of
                             Nothing ->

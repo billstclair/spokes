@@ -12,7 +12,7 @@
 module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , Point, Sizes, RenderInfo
                              , Color(..), MovedStone(..), NodeClassification(..)
-                             , Move(..), History
+                             , Move(..), Turn, History
                              , StonePile, DisplayList
                              , zeroPoint, emptyStonePile, emptyDisplayList
                              , get, set
@@ -94,8 +94,15 @@ type Move
     = Placement Color String
     | Resolution MovedStone String String
 
+type alias Turn =
+    { number : Int
+    , resolver : Int
+    , placements : List Move
+    , resolutions : List Move
+    }
+
 type alias History =
-    List Move
+    List Turn
 
 type alias StonePile =
     { nodeName : String

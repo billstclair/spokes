@@ -11,7 +11,7 @@
 
 module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , parseNodeName, count
-                             , isLegalMove, isLegalPlacement, makeMove
+                             , isLegalMove, isLegalPlacement, makeMove, undoMove
                              , computeDisplayList, findResolution
                              )
 
@@ -461,56 +461,6 @@ setNode : String -> Node -> Board -> Board
 setNode name node board =
     Dict.insert name node board
 
-playMove : Move -> Board -> Board
-playMove move board =
-    case move of
-        Placement color name ->
-            case getNode name board of
-                Nothing ->
-                    board
-                Just node ->
-                    let n = case color of
-                                White ->
-                                    { node | whiteStones = node.whiteStones + 1 }
-                                Black ->
-                                    { node | blackStones = node.blackStones + 1 }
-                    in
-                        Dict.insert name n board
-        Resolution moved from to ->
-            case getNode from board of
-                Nothing ->
-                    board
-                Just fromNode ->
-                    case getNode to board of
-                        Nothing ->
-                            board
-                        Just toNode ->
-                            let (dw, db) = case moved of
-                                               MoveWhite -> (1, 0)
-                                               MoveBlack -> (0, 1)
-                                               MoveBlock -> (1, 1)
-                                (fn, tn) =
-                                        ( { fromNode
-                                              | whiteStones
-                                                = fromNode.whiteStones - dw
-                                              , blackStones
-                                                = fromNode.blackStones - db
-                                              }
-                                        , { toNode
-                                              | whiteStones
-                                                = toNode.whiteStones + dw
-                                              , blackStones
-                                                = toNode.blackStones + db
-                                          }
-                                        )
-                            in
-                                if from == to then
-                                    board
-                                else
-                                    board
-                                        |> Dict.insert from fn
-                                        |> Dict.insert to tn
-
 nodeNeedsResolution : Node -> Bool
 nodeNeedsResolution node =
     not (node.whiteStones<=1 && node.blackStones<=1)
@@ -692,9 +642,9 @@ deltaStones : Color -> Int -> Node -> Node
 deltaStones color delta node =
     case color of
         White ->
-            { node | whiteStones = node.whiteStones + delta }
+            { node | whiteStones = max 0 (node.whiteStones + delta) }
         Black ->
-            { node | blackStones = node.blackStones + delta }
+            { node | blackStones = max 0 (node.blackStones + delta) }
 
 moveStones : MovedStone -> Int -> Node -> Node
 moveStones moved delta node =
@@ -708,6 +658,20 @@ moveStones moved delta node =
                 | whiteStones = node.whiteStones + delta
                 , blackStones = node.blackStones + delta
             }
+
+undoMove : Move -> Board -> Board
+undoMove move board =
+    case move of
+        Placement color nodeName ->
+            case getNode nodeName board of
+                Nothing ->
+                    board
+                Just node ->
+                    let n = deltaStones color -1 node
+                    in
+                        setNode nodeName n board
+        Resolution moved from to ->
+            makeMove (Resolution moved to from) board
 
 makeMove : Move -> Board -> Board
 makeMove move board =
@@ -734,7 +698,6 @@ makeMove move board =
                             in
                                 setNode from fn
                                     <| setNode to tn board
-                            
 
 partitionStones : Int -> Int -> List (List String)
 partitionStones black white =
