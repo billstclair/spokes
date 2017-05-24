@@ -35,6 +35,7 @@ type Msg
     | Focus Int
     | SetInputColor Color
     | SetPage Page
+    | Undo
 
 type alias Board =
     Dict String Node

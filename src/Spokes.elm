@@ -11,7 +11,8 @@
 
 module Spokes exposing (..)
 
-import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo, Move
+import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
+                                      , Move(..), MovedStone(..)
                                       , DisplayList, emptyDisplayList
                                       , StonePile, Color(..)
                                       , Turn, History
@@ -27,7 +28,7 @@ import Html exposing ( Html, Attribute
 import Html.Attributes exposing ( value, size, maxlength, href, src, title
                                 , alt, style, selected, type_, name, checked
                                 , placeholder, disabled, target
-                                , width, height
+                                , width, height, class
                                 )
 import Html.Events exposing ( onClick, onInput, onFocus )
 import Array exposing ( Array )
@@ -43,8 +44,8 @@ main =
         }
 
 type Phase
-    = Placement
-    | Resolution
+    = PlacementPhase
+    | ResolutionPhase
 
 type alias Model =
     { page : Page
@@ -84,7 +85,7 @@ initialModel =
     , players = 2
     , newPlayers = 2
     , turn = 1
-    , phase = Placement
+    , phase = PlacementPhase
     , lastFocus = 1
     , inputColor = White
     , inputs = initialInputs
@@ -95,6 +96,12 @@ initialModel =
 init : ( Model, Cmd Msg )
 init =
     ( initialModel, Cmd.none )
+
+colorLetter : Color -> String
+colorLetter color =
+    case color of
+        White -> "W"
+        Black -> "B"
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -126,6 +133,8 @@ update msg model =
             ( { model | inputColor = color }
             , Cmd.none
             )
+        Undo ->
+            undoMove model
         Place ->
             case getPlacements model of
                 Nothing ->
@@ -163,13 +172,11 @@ update msg model =
         NodeClick nodeName ->
             case model.selectedPile of
                 Nothing ->
-                    if (model.phase == Resolution) ||
+                    if (model.phase == ResolutionPhase) ||
                         (String.all Char.isDigit nodeName) then
                         ( model, Cmd.none )
                     else
-                        let c = case model.inputColor of
-                                    White -> "W"
-                                    Black -> "B"
+                        let c = colorLetter model.inputColor
                             input = c ++ nodeName
                         in
                             ( { model
@@ -201,6 +208,65 @@ update msg model =
                     else
                         maybeMakeMove pile.nodeName p model
 
+undoMove : Model -> (Model, Cmd Msg)
+undoMove model =
+    let history = model.history
+        board = model.board
+    in
+        case history of
+            [] ->
+                (model, Cmd.none)
+            { number, resolver, placements, resolutions } :: tail ->
+                case List.reverse resolutions of
+                    [] ->
+                        case placements of
+                            [] ->
+                                case tail of
+                                    [] ->
+                                        (model, Cmd.none)
+                                    { number, resolver } :: _ ->
+                                        undoMove { model
+                                                     | turn = number
+                                                     , resolver = resolver
+                                                     , history = tail
+                                                 }
+                            _ ->
+                                let b = List.foldr Board.undoMove board placements
+                                    his = { number = number
+                                          , resolver = resolver
+                                          , placements = []
+                                          , resolutions = []
+                                          }
+                                          :: tail
+                                    dl = computeDisplayList b model.renderInfo
+                                in
+                                    ( { model
+                                          | board = b
+                                          , displayList = dl
+                                          , history = his
+                                          , phase = PlacementPhase
+                                      }
+                                    , Cmd.none
+                                    )
+                    res :: restail ->
+                        let b = Board.undoMove res board
+                            his = { number = number
+                                  , resolver = resolver
+                                  , placements = placements
+                                  , resolutions = List.reverse restail
+                                  }
+                                  :: tail
+                            dl = computeDisplayList b model.renderInfo
+                        in
+                            ( { model
+                                  | board = b
+                                  , displayList = dl
+                                  , history = his
+                                  , phase = ResolutionPhase
+                              }
+                            , Cmd.none
+                            )
+
 resolution : Maybe Move -> DisplayList -> Model -> History -> (Int, Phase, History)
 resolution maybeMove displayList model history =
     let resolved = displayList.unresolvedPiles == []
@@ -208,7 +274,7 @@ resolution maybeMove displayList model history =
                        (model.resolver % model.players) + 1
                    else
                        model.resolver
-        phase = if resolved then Placement else Resolution
+        phase = if resolved then PlacementPhase else ResolutionPhase
         his = case history of
                   [] ->
                       []    --can't happen
@@ -230,7 +296,7 @@ resolution maybeMove displayList model history =
                           else
                               his2
     in
-        (resolver, phase, log "history" his)
+        (resolver, phase, his)
 
 maybeMakeMove : String -> StonePile -> Model -> ( Model, Cmd Msg )
 maybeMakeMove nodeName pile model =
@@ -353,8 +419,8 @@ renderGamePage model =
         [ inputItems model
         , p []
             [ case model.phase of
-                  Placement -> placementLine model
-                  Resolution -> resolutionLine model
+                  PlacementPhase -> placementLine model
+                  ResolutionPhase -> resolutionLine model
             ]
         , p []
             [ b [ text "Placement Click Color: " ]
@@ -394,10 +460,14 @@ pageLinks currentPage =
     span []
         <| List.map (pageLink currentPage) pages
 
+style_ = node "style"
+
 view : Model -> Html Msg
 view model =
     center []
-        [ h2 [] [ text "Spokes" ]
+        [ style_ [ type_ "text/css"]
+              [ text "@import \"style.css\"" ]
+        , h2 [] [ text "Spokes" ]
         , case model.page of
               GamePage ->
                   renderGamePage model
@@ -430,44 +500,77 @@ view model =
 
 historyDiv : Model -> Html Msg
 historyDiv model =
-    table []
-        <| (tr []
-                [ th [] [ text "Turn #" ]
-                , th [] [ text "Resolver" ]
-                , th [] [ text "Details" ]
-                ]
-           ) :: (List.map turnRow model.history)
+    div []
+        [ p []
+              [ button [ onClick Undo ]
+                    [ text "Undo" ]
+              ]
+        , table [ class "bordered" ]
+            <| (tr []
+                    [ th [] [ text "Turn #" ]
+                    , th [] [ text "Resolver" ]
+                    , th [] [ text "Details" ]
+                    ]
+               ) :: (List.map turnRow model.history)
+        ]
 
 turnRow : Turn -> Html Msg
 turnRow turn =
     tr []
         [ td [] [ text <| toString turn.number ]
         , td [] [ text <| toString turn.resolver ]
-        , td [] [ p []
-                      [ b [ text "Placement:" ]
-                      , br
-                      , text <| placementsHistoryText turn.placements
-                      ]
-                , case turn.resolutions of
-                      [] ->
-                          text ""
-                      resolutions ->
-                          p []
-                              (( b [ text "Resolutions: " ] )
-                              :: ( List.concatMap renderResolution resolutions )
-                              )
-                ]
+        , td [ style [("text-align", "left")] ]
+            <| if turn.placements == [] then
+                   [ text "" ]
+               else
+                   [ span []
+                         [ b [ text "Place: " ]
+                         , text <| placementsHistoryText turn.placements
+                         ]
+                   , case turn.resolutions of
+                         [] ->
+                             text ""
+                         resolutions ->
+                             span []
+                                 (br
+                                 :: ( b [ text "Resolve: " ] )
+                                 :: ( List.concatMap renderResolution resolutions )
+                                 )
+                   ]
         ]
     
+placementText : Move -> String
+placementText move =
+    case move of
+        Placement color node ->
+            (colorLetter color) ++ node
+        _ ->
+            ""
+
 placementsHistoryText : List Move -> String
 placementsHistoryText moves =
-    toString moves
+    let strings = List.filter (\x -> x /= "")
+                  <| List.map placementText moves
+    in
+        String.concat <| List.intersperse ", " strings
+
+movedStoneString : MovedStone -> String
+movedStoneString stone =
+    case stone of
+        MoveBlack -> "Black"
+        MoveWhite -> "White"
+        MoveBlock -> "Block"
 
 renderResolution : Move -> List (Html Msg)
 renderResolution move =
-    [ br
-    , text <| toString move
-    ]
+    case move of
+        Resolution moved from to ->
+            [ br
+            , text <|
+                (movedStoneString moved) ++ ": " ++ from ++ " to " ++ to
+            ]
+        _ ->
+            [ text "" ]
 
 
 isEven : Int -> Bool
@@ -496,10 +599,10 @@ inputItem player model =
         [ b [ text <| (toString player) ++ ": " ]
         , input [ type_ "text"
                 , onInput <| SetInput player
-                , disabled <| model.phase == Resolution
+                , disabled <| model.phase == ResolutionPhase
                 , placeholder
                       <| if player == model.lastFocus &&
-                          model.phase == Placement
+                          model.phase == PlacementPhase
                          then
                              examplePlaceString player
                          else
