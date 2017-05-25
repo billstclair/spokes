@@ -477,6 +477,11 @@ view model =
                   renderHelpPage
         , p [] [ pageLinks model.page
                , br
+               , a [ href "https://gibgoygames.com/"
+                   , target "_blank"
+                   ]
+                   [ text "Gib Goy Games" ]
+               , text " "
                , a [ href "https://github.com/billstclair/spokes"
                    , target "_blank"
                    ]
