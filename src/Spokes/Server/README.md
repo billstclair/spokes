@@ -1,4 +1,4 @@
-* Spokes Server
+# Spokes Server
 
 This directory contains Elm code for the Spokes server.
 
