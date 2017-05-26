@@ -9,9 +9,9 @@
   },
   "main": "index.js",
   "scripts": {
-    "start:server": "node ./bin",
-    "build:server:server": "elm-make ../src/Spokes/Server/Server.elm --output ./bin/server.js",
-    "build:server:client": "elm-make ../src/Spokes/Server/Client.elm --output ./bin/client.js",
+    "start:server": "node ./www",
+    "build:server:server": "elm-make ../src/Spokes/Server/Server.elm --output ./www/server.js",
+    "build:server:client": "elm-make ../src/Spokes/Server/Client.elm --output ./www/client.js",
     "build:server": "npm run build:server:client && npm run build:server:server"
   },
   "files": [

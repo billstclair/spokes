@@ -22,5 +22,4 @@ To build after a code change:
 
 To start the server:
 
-* `screen -S spokes-server`
 * `npm run start:server`
