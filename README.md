@@ -1,6 +1,6 @@
 The game of Spokes.
 
-See [site/rules/index.html](site/rules/index.html) for rules.
+See [site/docs/rules.html](site/docs/rules.html) for rules and [site/docs/help.html](site/docs/help.html) for instructions.
 
 Invented by Chris St. Clair.
 
