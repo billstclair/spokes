@@ -9,7 +9,7 @@ Messages are all JSON. There are two basic types:
     ["req","<name>",{"<key>":"<value>",...}]
     ["rsp","<name>",{"<key>":"<value>",...}]
     
-`"req"` denotes a request message, sent from client to server. `"rsp"` denotes a response message, sent from server to client. "<name>" is the message name. The `"<key>":"<value>"` pairs are specific to each message.
+`"req"` denotes a request message, sent from client to server. `"rsp"` denotes a response message, sent from server to clients. `<name>` is the message name. The `"<key>":"<value>"` pairs are specific to each message.
 
 ## Messages
 
@@ -19,7 +19,7 @@ If a literal is included as a parameter value, the parameter is optional, and th
 
 Message | Parameters | Description
 ------- | ---------- | -----------
-`"req","new"` | `{"name":"<name>", "players":"2"}` | Start a new game. Error if a game is in play.
+`"req","new"` | `{"players":"2"}` | Start a new game. Error if a game is in play.
 `"rsp","new"` | `{"gameid":"<gameid>"}` | Return the identifier for the new game.
 `"req","join"` | `{"gameid":"<gameid>", "name":"<name>"}` | Join a game in progress.
 `"rsp","join"` | `{"gameid":"<gameid>", "name":<name>", "number":"<n>"}` | Join successful. Return player number. This is sent to every already-joined player.
