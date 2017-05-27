@@ -75,12 +75,15 @@ protocolData =
     , ResolveReq { gameid = "asdf", resolution = Resolution MoveBlock "C3" "D3" }
     , ResolveRsp { gameid = "asdf", resolution = Resolution MoveBlock "C3" "D3" }
     , UndoReq { gameid = "asdf"
-              , message = PlaceReq
+              , message = PlacedRsp
                           { gameid = "asdf"
-                          , placement = Placement White "C1" }
+                          , placements = [ Placement White "C1"
+                                         , Placement Black "D1"
+                                         ]
+                          }
               }
     , UndoRsp { gameid = "asdf"
-              , message = ResolveReq
+              , message = ResolveRsp
                           { gameid = "asdf"
                           , resolution = Resolution MoveBlock "C3" "D3"
                           }
