@@ -11,6 +11,7 @@
 
 module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , parseNodeName, count
+                             , parsePlacementMove, placementText, colorLetter
                              , isLegalMove, isLegalPlacement, makeMove, undoMove
                              , computeDisplayList, findResolution
                              )
@@ -593,6 +594,20 @@ count players player board =
                            )
                     (0, 0)
                     board
+
+colorLetter : Color -> String
+colorLetter color =
+    case color of
+        White -> "W"
+        Black -> "B"
+
+placementText : Move -> String
+placementText move =
+    case move of
+        Placement color node ->
+            (colorLetter color) ++ node
+        _ ->
+            ""
 
 parsePlacementMove : String -> Result String Move
 parsePlacementMove string =

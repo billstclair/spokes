@@ -16,9 +16,11 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , DisplayList, emptyDisplayList
                                       , StonePile, Color(..)
                                       , Turn, History
+                                      , movedStoneString
                                       )
 import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , computeDisplayList, findResolution
+                                      , placementText, colorLetter
                                       )
 
 import Html exposing ( Html, Attribute
@@ -96,12 +98,6 @@ initialModel =
 init : ( Model, Cmd Msg )
 init =
     ( initialModel, Cmd.none )
-
-colorLetter : Color -> String
-colorLetter color =
-    case color of
-        White -> "W"
-        Black -> "B"
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -544,27 +540,12 @@ turnRow turn =
                    ]
         ]
     
-placementText : Move -> String
-placementText move =
-    case move of
-        Placement color node ->
-            (colorLetter color) ++ node
-        _ ->
-            ""
-
 placementsHistoryText : List Move -> String
 placementsHistoryText moves =
     let strings = List.filter (\x -> x /= "")
                   <| List.map placementText moves
     in
         String.concat <| List.intersperse ", " strings
-
-movedStoneString : MovedStone -> String
-movedStoneString stone =
-    case stone of
-        MoveBlack -> "Black"
-        MoveWhite -> "White"
-        MoveBlock -> "Block"
 
 renderResolution : Move -> List (Html Msg)
 renderResolution move =

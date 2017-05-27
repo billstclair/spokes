@@ -16,6 +16,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , StonePile, DisplayList
                              , zeroPoint, emptyStonePile, emptyDisplayList
                              , get, set
+                             , movedStoneString, stringToMovedStone
                              )
 
 import Dict exposing ( Dict )
@@ -82,6 +83,25 @@ type MovedStone
     = MoveBlack
     | MoveWhite
     | MoveBlock
+
+movedStoneString : MovedStone -> String
+movedStoneString stone =
+    case stone of
+        MoveBlack -> "Black"
+        MoveWhite -> "White"
+        MoveBlock -> "Block"
+
+stringToMovedStone : String -> Maybe MovedStone
+stringToMovedStone string =
+    case string of
+        "Black" ->
+            Just MoveBlack
+        "White" ->
+            Just MoveWhite
+        "Block" ->
+            Just MoveBlock
+        _ ->
+            Nothing
 
 type NodeClassification
     = Empty
