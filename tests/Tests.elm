@@ -65,6 +65,11 @@ protocolData =
     , PlaceReq { gameid = "asdf", placement = Placement White "C1" }
     , PlaceReq { gameid = "asdf", placement = Placement Black "D1" }
     , PlaceRsp { gameid = "asdf", number = 2 }
+    , PlacedRsp { gameid = "asdf"
+                , placements = [ Placement White "C1"
+                               , Placement Black "D1"
+                               ]
+                }
     , ResolveReq { gameid = "asdf", resolution = Resolution MoveWhite "D1" "1" }
     , ResolveReq { gameid = "asdf", resolution = Resolution MoveBlack "D2" "2" }
     , ResolveReq { gameid = "asdf", resolution = Resolution MoveBlock "C3" "D3" }
