@@ -8,10 +8,10 @@ Node.JS code, scripts, and instructions for building the server are in the [serv
 
 Messages are all JSON. There are two basic types:
 
-    ["req","<name>",{"<key>":"<value>",...}]
-    ["rsp","<name>",{"<key>":"<value>",...}]
+    ["req","<msg>",{"<key>":"<value>",...}]
+    ["rsp","<msg>",{"<key>":"<value>",...}]
     
-`"req"` denotes a request message, sent from client to server. `"rsp"` denotes a response message, sent from server to clients. `<name>` is the message name. The `"<key>":"<value>"` pairs are specific to each message.
+`"req"` denotes a request message, sent from client to server. `"rsp"` denotes a response message, sent from server to clients. `<msg>` is the message name. The `"<key>":"<value>"` pairs are specific to each message.
 
 ## Messages
 
