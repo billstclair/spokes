@@ -170,7 +170,7 @@ decodeMessage string =
 
 messageDecoder : Decoder Message
 messageDecoder =
-    JD.map parseRawMessage rawMessageDecoder
+    JD.lazy (\_ -> JD.map parseRawMessage rawMessageDecoder)
 
 allStrings : List (Maybe String) -> Maybe (List String)
 allStrings strings =
@@ -415,91 +415,89 @@ encodeMessage : Message -> String
 encodeMessage message =
     JE.encode 0 <| messageEncoder message
 
-messageValue : String -> String -> List (String, Value) -> Value
+messageValue : String -> String -> List (String, String) -> Value
 messageValue typ msg params =
-    JE.list [ JE.string typ, JE.string msg, JE.object params ]
-
-messagePlistValue : String -> String -> List (String, String) -> Value
-messagePlistValue typ msg params =
-    messageValue typ msg <| List.map (\(k, v) -> (k, JE.string v)) params
+    let p = List.map (\(k, v) -> (k, JE.string v)) params
+    in
+        JE.list [ JE.string typ, JE.string msg, JE.object p ]
 
 messageEncoder : Message -> Value
 messageEncoder message =
     case message of
         RawMessage typ msg plist ->
-            messagePlistValue typ msg plist
+            messageValue typ msg plist
         -- Basic game play
         NewReq { players } ->
-            messageValue "req" "new" [("players", JE.int players)]
+            messageValue "req" "new" [("players", toString players)]
         NewRsp { gameid } ->
-            messagePlistValue "rsp" "new" [("gameid", gameid)]
+            messageValue "rsp" "new" [("gameid", gameid)]
         JoinReq { gameid, name } ->
-            messagePlistValue "req" "join" [("gameid", gameid), ("name", name)]
+            messageValue "req" "join" [("gameid", gameid), ("name", name)]
         JoinRsp { gameid, name, number } ->
-            messageValue "rsp" "join" [ ("gameid", JE.string gameid)
-                                      , ("name", JE.string name)
-                                      , ("number", JE.int number)
+            messageValue "rsp" "join" [ ("gameid", gameid)
+                                      , ("name", name)
+                                      , ("number", toString number)
                                       ]
         PlacephaseRsp { gameid, turn, resolver } ->
-            messageValue "rsp" "placephase" [ ("gameid", JE.string gameid)
-                                            , ("turn", JE.int turn)
-                                            , ("resolver", JE.int resolver)
+            messageValue "rsp" "placephase" [ ("gameid", gameid)
+                                            , ("turn", toString turn)
+                                            , ("resolver", toString resolver)
                                             ]
         PlaceReq { gameid, placement } ->
-            messagePlistValue "req" "place" [ ("gameid", gameid)
-                                            , ("placement", placementText placement)
-                                            ]
+            messageValue "req" "place" [ ("gameid", gameid)
+                                       , ("placement", placementText placement)
+                                       ]
         PlaceRsp { gameid, number } ->
-            messageValue "rsp" "place" [ ("gameid", JE.string gameid)
-                                       , ("number", JE.int number)
+            messageValue "rsp" "place" [ ("gameid", gameid)
+                                       , ("number", toString number)
                                        ]
         PlacedRsp { gameid, placements } ->
-            messagePlistValue "rsp" "placed" [ ("gameid", gameid)
-                                             , ("placements",
-                                                    String.join ","
-                                                    <| List.map
-                                                        placementText placements
-                                               )
-                                             ]
+            messageValue "rsp" "placed" [ ("gameid", gameid)
+                                        , ("placements",
+                                               String.join ","
+                                               <| List.map
+                                               placementText placements
+                                          )
+                                        ]
         ResolveReq { gameid, resolution } ->
             let (color, from, to) = resolutionToStrings resolution
             in
-                messagePlistValue "req" "resolve" [ ("gameid", gameid)
-                                                  , ("color", color)
-                                                  , ("from", from)
-                                                  , ("to", to)
-                                                  ]
+                messageValue "req" "resolve" [ ("gameid", gameid)
+                                             , ("color", color)
+                                             , ("from", from)
+                                             , ("to", to)
+                                             ]
         ResolveRsp { gameid, resolution } ->
             let (color, from, to) = resolutionToStrings resolution
             in
-                messagePlistValue "rsp" "resolve" [ ("gameid", gameid)
-                                                  , ("color", color)
-                                                  , ("from", from)
-                                                  , ("to", to)
-                                                  ]
+                messageValue "rsp" "resolve" [ ("gameid", gameid)
+                                             , ("color", color)
+                                             , ("from", from)
+                                             , ("to", to)
+                                             ]
         -- Errors
         UndoReq { gameid, message } ->
-            messagePlistValue "req" "undo" [ ("gameid", gameid)
-                                           , ("message", encodeMessage message)
-                                           ]
+            messageValue "req" "undo" [ ("gameid", gameid)
+                                      , ("message", encodeMessage message)
+                                      ]
         UndoRsp { gameid, message } ->
-            messagePlistValue "rsp" "undo" [ ("gameid", gameid)
-                                           , ("message", encodeMessage message)
-                                           ]
+            messageValue "rsp" "undo" [ ("gameid", gameid)
+                                      , ("message", encodeMessage message)
+                                      ]
         ErrorRsp { request, id, text } ->
-            messageValue "rsp" "error" [ ("request", JE.string request)
-                                       , ("id", JE.int id)
-                                       , ("text", JE.string text)
+            messageValue "rsp" "error" [ ("request", request)
+                                       , ("id", toString id)
+                                       , ("text", text)
                                        ]
         -- Chat
         ChatReq { gameid, text } ->
-            messagePlistValue "req" "chat" [ ("gameid", gameid)
-                                           , ("text", text)
-                                           ]
+            messageValue "req" "chat" [ ("gameid", gameid)
+                                      , ("text", text)
+                                      ]
         ChatRsp { gameid, text, number } ->
-            messageValue "rsp" "chat" [ ("gameid", JE.string gameid)
-                                      , ("text", JE.string text)
-                                      , ("number", JE.int number)
+            messageValue "rsp" "chat" [ ("gameid", gameid)
+                                      , ("text", text)
+                                      , ("number", toString number)
                                       ]
 
 resolutionToStrings : Move -> (String, String, String)
