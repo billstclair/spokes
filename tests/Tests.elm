@@ -62,8 +62,8 @@ protocolData =
     , JoinReq { gameid = "asdf", name = "bill" }
     , JoinRsp { gameid = "asdf", name = "bill", number = 1 }
     , PlacephaseRsp { gameid = "asdf", turn = 2, resolver = 2 }
-    , PlaceReq { gameid = "asdf", placement = Placement White "C1" }
-    , PlaceReq { gameid = "asdf", placement = Placement Black "D1" }
+    , PlaceReq { gameid = "asdf", placement = Placement White "C1", number = 1 }
+    , PlaceReq { gameid = "asdf", placement = Placement Black "D1", number = 2 }
     , PlaceRsp { gameid = "asdf", number = 2 }
     , PlacedRsp { gameid = "asdf"
                 , placements = [ Placement White "C1"

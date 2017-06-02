@@ -31,7 +31,7 @@ type Message
     | JoinReq { gameid : String, name : String }
     | JoinRsp { gameid : String, name : String, number : Int }
     | PlacephaseRsp { gameid : String, turn : Int, resolver : Int }
-    | PlaceReq { gameid : String, placement : Move }
+    | PlaceReq { gameid : String, placement : Move, number : Int }
     | PlaceRsp { gameid : String, number : Int }
     | PlacedRsp { gameid : String, placements : List Move }
     | ResolveReq { gameid : String, resolution : Move }
@@ -205,7 +205,7 @@ parseRequest msg params rawMessage =
                     _ ->
                         rawMessage
         "place" ->
-            let { gameid, placement } = params
+            let { gameid, placement, number } = params
             in
                 case gameid of
                     Nothing ->
@@ -215,8 +215,13 @@ parseRequest msg params rawMessage =
                             Nothing ->
                                 rawMessage
                             Just p ->
-                                PlaceReq { gameid = gid
-                                         , placement = p
+                                case number of
+                                    Nothing ->
+                                        rawMessage
+                                    Just num ->
+                                        PlaceReq { gameid = gid
+                                                 , placement = p
+                                                 , number = num
                                          }
         "resolve" ->
             let { gameid, resolution } = params
@@ -443,9 +448,10 @@ messageEncoder message =
                                             , ("turn", toString turn)
                                             , ("resolver", toString resolver)
                                             ]
-        PlaceReq { gameid, placement } ->
+        PlaceReq { gameid, placement, number } ->
             messageValue "req" "place" [ ("gameid", gameid)
                                        , ("placement", placementText placement)
+                                       , ("number", toString number)
                                        ]
         PlaceRsp { gameid, number } ->
             messageValue "rsp" "place" [ ("gameid", gameid)
