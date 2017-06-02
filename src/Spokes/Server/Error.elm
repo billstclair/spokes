@@ -18,11 +18,15 @@ import Dict exposing ( Dict )
 type ServerError
     = MalformedJsonErr
     | IllegalRequestErr
+    | IllegalPlayerCountErr
+    | WrongGameidErr
 
 errnums : List (ServerError, Int)
 errnums =
     [ (MalformedJsonErr, 1)
     , (IllegalRequestErr, 2)
+    , (IllegalPlayerCountErr, 3)
+    , (WrongGameidErr, 4)
     ]
 
 errnum : ServerError -> Int

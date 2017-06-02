@@ -10,7 +10,7 @@
 ----------------------------------------------------------------------
 
 module Spokes.Board exposing ( initialBoard, renderInfo, render
-                             , parseNodeName, count
+                             , parseNodeName, count, getNode
                              , parsePlacementMove, placementText, colorLetter
                              , isLegalMove, isLegalPlacement, makeMove, undoMove
                              , computeDisplayList, findResolution
