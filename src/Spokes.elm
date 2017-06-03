@@ -15,7 +15,7 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , Move(..), MovedStone(..)
                                       , DisplayList, emptyDisplayList
                                       , StonePile, Color(..)
-                                      , Turn, History,
+                                      , Turn, History
                                       , ServerInterface, Message(..)
                                       , movedStoneString
                                       )
