@@ -9,12 +9,11 @@
 --
 ----------------------------------------------------------------------
 
-module Spokes.Server.EncodeDecode exposing ( Message(..)
-                                           , messageDecoder, decodeMessage
+module Spokes.Server.EncodeDecode exposing ( messageDecoder, decodeMessage
                                            , messageEncoder, encodeMessage
                                            )
 
-import Spokes.Types exposing ( Color(..), Move(..)
+import Spokes.Types exposing ( Color(..), Move(..), Message(..)
                              , movedStoneString, stringToMovedStone
                              , get
                              )
@@ -22,27 +21,6 @@ import Spokes.Board exposing ( parsePlacementMove, placementText, colorLetter )
 
 import Json.Decode as JD exposing ( Decoder )
 import Json.Encode as JE exposing ( Value )
-
-type Message
-    = RawMessage String String (List (String, String))
-    -- Basic game play
-    | NewReq { players : Int }
-    | NewRsp { gameid : String }
-    | JoinReq { gameid : String, name : String }
-    | JoinRsp { gameid : String, name : String, number : Int }
-    | PlacephaseRsp { gameid : String, turn : Int, resolver : Int }
-    | PlaceReq { gameid : String, placement : Move, number : Int }
-    | PlaceRsp { gameid : String, number : Int }
-    | PlacedRsp { gameid : String, placements : List Move }
-    | ResolveReq { gameid : String, resolution : Move }
-    | ResolveRsp { gameid : String, resolution : Move }
-    -- Errors
-    | UndoReq { gameid : String, message: Message }
-    | UndoRsp { gameid : String, message: Message }
-    | ErrorRsp { request : String, id : Int, text : String }
-    -- Chat
-    | ChatReq { gameid : String, text : String, number : Int }
-    | ChatRsp { gameid : String, text : String, number : Int }
 
 ---
 --- Decoder

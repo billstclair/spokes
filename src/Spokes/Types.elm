@@ -14,6 +14,8 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , Color(..), MovedStone(..), NodeClassification(..)
                              , Move(..), Turn, History
                              , StonePile, DisplayList
+                             , Message(..)
+                             , ServerState, ServerInterface(..), ServerPhase(..)
                              , zeroPoint, emptyStonePile, emptyDisplayList
                              , get, set
                              , movedStoneString, stringToMovedStone
@@ -37,6 +39,7 @@ type Msg
     | SetInputColor Color
     | SetPage Page
     | Undo
+    | ServerResponse (ServerInterface Msg) Message
 
 type alias Board =
     Dict String Node
@@ -168,3 +171,54 @@ get key plist =
 set : String -> a -> XPlist a -> XPlist a
 set key value plist =
     (key, value) :: (List.filter (\(k,_) -> k /= key) plist)
+
+---
+--- Backend interface
+---
+
+type Message
+    = RawMessage String String (List (String, String))
+    -- Basic game play
+    | NewReq { players : Int }
+    | NewRsp { gameid : String }
+    | JoinReq { gameid : String, name : String }
+    | JoinRsp { gameid : String, name : String, number : Int }
+    | PlacephaseRsp { gameid : String, turn : Int, resolver : Int }
+    | PlaceReq { gameid : String, placement : Move, number : Int }
+    | PlaceRsp { gameid : String, number : Int }
+    | PlacedRsp { gameid : String, placements : List Move }
+    | ResolveReq { gameid : String, resolution : Move }
+    | ResolveRsp { gameid : String, resolution : Move }
+    -- Errors
+    | UndoReq { gameid : String, message: Message }
+    | UndoRsp { gameid : String, message: Message }
+    | ErrorRsp { request : String, id : Int, text : String }
+    -- Chat
+    | ChatReq { gameid : String, text : String, number : Int }
+    | ChatRsp { gameid : String, text : String, number : Int }
+
+type ServerPhase
+    = JoinPhase
+    | PlacementPhase
+    | ResolutionPhase
+
+type alias ServerState =
+    { board : Board
+    , renderInfo : RenderInfo
+    , phase : ServerPhase
+    , players : Int
+    , turn : Int
+    , resolver : Int
+    , placements : Dict Int Move
+    , gameid : String
+    , history : History
+    }
+
+type ServerInterface msg
+    = ServerInterface
+      { server : String
+      , wrapper : ServerInterface msg -> Message -> msg
+      , state : Maybe ServerState
+      , sender : ServerInterface msg -> Message -> Cmd msg
+      }
+

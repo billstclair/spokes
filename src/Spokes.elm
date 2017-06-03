@@ -15,13 +15,15 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , Move(..), MovedStone(..)
                                       , DisplayList, emptyDisplayList
                                       , StonePile, Color(..)
-                                      , Turn, History
+                                      , Turn, History,
+                                      , ServerInterface, Message(..)
                                       , movedStoneString
                                       )
 import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , computeDisplayList, findResolution
                                       , placementText, colorLetter
                                       )
+import Spokes.Server.Interface exposing ( makeProxyServer, send )
 
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
@@ -64,6 +66,7 @@ type alias Model =
     , inputs : Array String
     , resolver : Int
     , selectedPile : Maybe StonePile
+    , server : ServerInterface Msg
     }
 
 initialInputs : Array String
@@ -93,6 +96,7 @@ initialModel =
     , inputs = initialInputs
     , resolver = 1
     , selectedPile = Nothing
+    , server = makeProxyServer ServerResponse
     }
 
 init : ( Model, Cmd Msg )
@@ -136,10 +140,7 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
                 Just moves ->
-                    let board = List.foldr
-                                (\move b -> makeMove move b)
-                                model.board
-                                moves
+                    let board = List.foldr makeMove model.board moves
                         his = case model.history of
                                   [] ->
                                       -- won't happen
@@ -203,6 +204,10 @@ update msg model =
                         )
                     else
                         maybeMakeMove pile.nodeName p model
+        ServerResponse server message ->
+            ( { model | server = server }
+            , Cmd.none
+            )
 
 undoMove : Model -> (Model, Cmd Msg)
 undoMove model =

@@ -9,18 +9,17 @@
 --
 ----------------------------------------------------------------------
 
-module Spokes.Server.Interface exposing ( ServerState , emptyServerState
+module Spokes.Server.Interface exposing ( emptyServerState
                                         , makeProxyServer, send
                                         , processServerMessage
                                         )
 
-import Spokes.Server.EncodeDecode exposing ( Message(..), encodeMessage )
+import Spokes.Server.EncodeDecode exposing ( encodeMessage )
 import Spokes.Server.Error exposing ( ServerError(..), errnum )
-
 import Spokes.Types exposing ( Board, DisplayList, Move(..), RenderInfo
-                             , Turn, History
-                             , emptyDisplayList )
-
+                             , History, Message(..)
+                             , ServerPhase(..), ServerState, ServerInterface(..)
+                             )
 import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
                              , getNode, isLegalMove, makeMove, undoMove
                              )
@@ -29,23 +28,6 @@ import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
 import Dict exposing ( Dict )
 import Task
 import List.Extra as LE
-
-type Phase
-    = JoinPhase
-    | PlacementPhase
-    | ResolutionPhase
-
-type alias ServerState =
-    { board : Board
-    , renderInfo : RenderInfo
-    , phase : Phase
-    , players : Int
-    , turn : Int
-    , resolver : Int
-    , placements : Dict Int Move
-    , gameid : String
-    , history : History
-    }
 
 emptyServerState : ServerState
 emptyServerState =
@@ -60,14 +42,6 @@ emptyServerState =
     , history = []
     }
 
-type ServerInterface msg
-    = ServerInterface
-      { server : String
-      , wrapper : ServerInterface msg -> Message -> msg
-      , state : Maybe ServerState
-      , sender : ServerInterface msg -> Message -> Cmd msg
-      }
-
 makeProxyServer : (ServerInterface msg -> Message -> msg) -> ServerInterface msg
 makeProxyServer wrapper =
     ServerInterface { server = ""
@@ -77,13 +51,13 @@ makeProxyServer wrapper =
                     }
 
 send : ServerInterface msg -> Message -> Cmd msg
-send (ServerInterface interface) message =
-    interface.sender (ServerInterface interface) message
+send ((ServerInterface interface) as si) message =
+    interface.sender si message
 
 proxyCmd : ServerInterface msg -> List Message -> Cmd msg
-proxyCmd (ServerInterface interface) messages =
+proxyCmd ((ServerInterface interface) as si) messages =
     let tasks = List.map Task.succeed messages
-        wrapper = interface.wrapper (ServerInterface interface)
+        wrapper = interface.wrapper si
         cmds = List.map (Task.perform wrapper) tasks
     in
         Cmd.batch cmds
@@ -102,7 +76,7 @@ errorRsp message error text =
              , text = text
              }
 
-phaseToString : Phase -> String
+phaseToString : ServerPhase -> String
 phaseToString phase =
     case phase of
         JoinPhase -> "join"
@@ -116,7 +90,7 @@ checkOnlyGameid state message gameid =
     else
         Just <| errorRsp message WrongGameidErr "Wrong gameid"
 
-checkGameid : ServerState -> Message -> String -> Phase -> Maybe Message
+checkGameid : ServerState -> Message -> String -> ServerPhase -> Maybe Message
 checkGameid state message gameid phase =
     case checkOnlyGameid state message gameid of
         Nothing ->
@@ -240,40 +214,52 @@ placeReq state message gameid placement number =
         case placement of
             Placement _ _ ->
                 if isLegalMove placement state.board then
-                    ( { state
-                          | placements = if done then
-                                             Dict.empty
-                                         else
-                                             placements
-                          , phase = if done then
-                                        ResolutionPhase
-                                    else
-                                        PlacementPhase
-                          , board = if done then
-                                        List.foldl
-                                            makeMove state.board placementsList
-                                    else
-                                        state.board
-                          , history = if done then
-                                          case state.history of
-                                              turn :: tail ->
-                                                  { turn
-                                                      | placements = placementsList
-                                                  } :: tail
-                                              history ->
-                                                  history
-                                      else
-                                          state.history
-                      }
-                    , if done then
-                          [ placeRsp
-                          , PlacedRsp { gameid = gameid
-                                      , placements = placementsList
-                                      }
-                          ]
-                      else
-                          [ placeRsp ]
-                    )
+                    let plcmnts = if done then
+                                      Dict.empty
+                                  else
+                                      placements
+                        board = if done then
+                                    List.foldl
+                                        makeMove state.board placementsList
+                                else
+                                    state.board
+                        phase = if done then
+                                    let displayList =
+                                            computeDisplayList
+                                                board state.renderInfo
+                                    in
+                                        if displayList.unresolvedPiles == [] then
+                                            PlacementPhase
+                                        else
+                                            ResolutionPhase
+                                else
+                                    PlacementPhase
+                        history = if done then
+                                      case state.history of
+                                          turn :: tail ->
+                                              { turn
+                                                  | placements = placementsList
+                                              } :: tail
+                                          history ->
+                                              history
+                                  else
+                                      state.history
+                    in
+                        ( { state
+                              | placements = plcmnts
+                              , board = board
+                              , phase = phase
+                              , history = history
+                          }
+                        , if done then
+                              [ placeRsp
+                              , PlacedRsp { gameid = gameid
+                                          , placements = placementsList
+                                          }
+                              ]
+                          else
+                              [ placeRsp ]
+                        )
                 else
                     ( state
                     , [errorRsp message IllegalRequestErr "Illegal Placement"]
@@ -450,10 +436,3 @@ undoReq state mess originalGameid undoMessage =
             ( state
             , [errorRsp mess IllegalRequestErr "No history"]
             )
-
-{-
-        UndoRsp { gameid, message } ->
-            messageValue "rsp" "undo" [ ("gameid", gameid)
-                                      , ("message", encodeMessage message)
-                                      ]
--}
