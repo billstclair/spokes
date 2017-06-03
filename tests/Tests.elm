@@ -89,6 +89,6 @@ protocolData =
                           }
               }
     , ErrorRsp { request = "foo", id = 1, text = "Malformed request." }
-    , ChatReq { gameid = "asdf", text = "Hello, World!" }
+    , ChatReq { gameid = "asdf", text = "Hello, World!", number = 1 }
     , ChatRsp { gameid = "asdf", text = "Hello, World!", number = 1 }
     ]

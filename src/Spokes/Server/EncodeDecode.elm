@@ -41,7 +41,7 @@ type Message
     | UndoRsp { gameid : String, message: Message }
     | ErrorRsp { request : String, id : Int, text : String }
     -- Chat
-    | ChatReq { gameid : String, text : String }
+    | ChatReq { gameid : String, text : String, number : Int }
     | ChatRsp { gameid : String, text : String, number : Int }
 
 ---
@@ -252,11 +252,15 @@ parseRequest msg params rawMessage =
                                         , message = mes
                                         }
         "chat" ->
-            let { gameid, text } = params
+            let { gameid, text, number } = params
             in
-                case allStrings [ gameid, text ] of
-                    Just [ gid, tex ] ->
-                        ChatReq { gameid = gid, text = tex }
+                case number of
+                    Just num ->
+                        case allStrings [ gameid, text ] of
+                            Just [ gid, tex ] ->
+                                ChatReq { gameid = gid, text = tex, number = num }
+                            _ ->
+                                rawMessage
                     _ ->
                         rawMessage
         _ ->
@@ -496,9 +500,10 @@ messageEncoder message =
                                        , ("text", text)
                                        ]
         -- Chat
-        ChatReq { gameid, text } ->
+        ChatReq { gameid, text, number } ->
             messageValue "req" "chat" [ ("gameid", gameid)
                                       , ("text", text)
+                                      , ("number", toString number)
                                       ]
         ChatRsp { gameid, text, number } ->
             messageValue "rsp" "chat" [ ("gameid", gameid)
