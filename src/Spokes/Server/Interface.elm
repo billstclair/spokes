@@ -16,7 +16,7 @@ module Spokes.Server.Interface exposing ( emptyServerState
 
 import Spokes.Server.EncodeDecode exposing ( encodeMessage )
 import Spokes.Server.Error exposing ( ServerError(..), errnum )
-import Spokes.Types exposing ( Board, DisplayList, Move(..), RenderInfo
+import Spokes.Types exposing ( Board, DisplayList, Move(..), StonePile, RenderInfo
                              , History, Message(..)
                              , ServerPhase(..), ServerState, ServerInterface(..)
                              )
@@ -34,6 +34,7 @@ emptyServerState =
     { board = initialBoard
     , renderInfo = renderInfo 600
     , phase = JoinPhase
+    , unresolvedPiles = []
     , players = 2
     , turn = 1
     , resolver = 1
@@ -223,17 +224,19 @@ placeReq state message gameid placement number =
                                         makeMove state.board placementsList
                                 else
                                     state.board
-                        phase = if done then
-                                    let displayList =
-                                            computeDisplayList
-                                                board state.renderInfo
-                                    in
-                                        if displayList.unresolvedPiles == [] then
-                                            PlacementPhase
-                                        else
-                                            ResolutionPhase
+                        (phase, unresolvedPiles) =
+                             if done then
+                                 let displayList =
+                                         computeDisplayList
+                                             board state.renderInfo
+                                 in
+                                     case displayList.unresolvedPiles of
+                                         [] ->
+                                             (PlacementPhase, [])
+                                         piles ->
+                                             (ResolutionPhase, piles)
                                 else
-                                    PlacementPhase
+                                    (PlacementPhase, [])
                         history = if done then
                                       case state.history of
                                           turn :: tail ->
@@ -249,6 +252,7 @@ placeReq state message gameid placement number =
                               | placements = plcmnts
                               , board = board
                               , phase = phase
+                              , unresolvedPiles = unresolvedPiles
                               , history = history
                           }
                         , if done then
@@ -270,14 +274,35 @@ placeReq state message gameid placement number =
                 , [errorRsp message IllegalRequestErr "Non-placement move"]
                 )
 
+isLegalResolution : Move -> List StonePile -> Bool
+isLegalResolution move piles =
+    case move of
+        Resolution _ from _ ->
+            case LE.find (\pil -> pil.nodeName == from) piles of
+                Nothing ->
+                    False
+                Just pile ->
+                    case pile.resolutions of
+                        Nothing ->
+                            False
+                        Just moves ->
+                            List.member move moves
+        _ ->
+            False
+
 resolveReq : ServerState -> Message -> String -> Move -> (ServerState, List Message)
 resolveReq state message gameid resolution =
     case resolution of
         Resolution _ _ _ ->
-            if isLegalMove resolution state.board then
+            if not <| isLegalResolution resolution state.unresolvedPiles then
+                ( state
+                , [errorRsp message IllegalRequestErr "Illegal Resolution"]
+                )
+            else
                 let board = makeMove resolution state.board
                     displayList = computeDisplayList board state.renderInfo
-                    done = (displayList.unresolvedPiles == [])
+                    unresolvedPiles = displayList.unresolvedPiles
+                    done = (unresolvedPiles == [])
                     phase = if done then
                                 PlacementPhase
                             else
@@ -314,6 +339,7 @@ resolveReq state message gameid resolution =
                     ( { state
                           | board = board
                           , phase = phase
+                          , unresolvedPiles = unresolvedPiles
                           , turn = turn
                           , resolver = resolver
                           , history = history
@@ -328,10 +354,6 @@ resolveReq state message gameid resolution =
                       else
                           [ resolveRsp ]
                     )
-            else
-                ( state
-                , [errorRsp message IllegalRequestErr "Illegal Resolution"]
-                )
         _ ->
             ( state
             , [errorRsp message IllegalRequestErr "Non-placement move"]

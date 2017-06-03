@@ -206,6 +206,7 @@ type alias ServerState =
     { board : Board
     , renderInfo : RenderInfo
     , phase : ServerPhase
+    , unresolvedPiles : List StonePile
     , players : Int
     , turn : Int
     , resolver : Int
