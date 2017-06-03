@@ -16,7 +16,7 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , DisplayList, emptyDisplayList
                                       , StonePile, Color(..)
                                       , Turn, History
-                                      , ServerInterface, Message(..)
+                                      , ServerPhase(..), ServerInterface, Message(..)
                                       , movedStoneString
                                       )
 import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
@@ -47,10 +47,6 @@ main =
         , subscriptions = (\x -> Sub.none)
         }
 
-type Phase
-    = PlacementPhase
-    | ResolutionPhase
-
 type alias Model =
     { page : Page
     , history : History
@@ -60,13 +56,14 @@ type alias Model =
     , players : Int
     , newPlayers : Int
     , turn : Int
-    , phase : Phase
+    , phase : ServerPhase
     , lastFocus : Int
     , inputColor : Color
     , inputs : Array String
     , resolver : Int
     , selectedPile : Maybe StonePile
     , server : ServerInterface Msg
+    , gameid : String
     }
 
 initialInputs : Array String
@@ -90,18 +87,21 @@ initialModel =
     , players = 2
     , newPlayers = 2
     , turn = 1
-    , phase = PlacementPhase
+    , phase = JoinPhase
     , lastFocus = 1
     , inputColor = White
     , inputs = initialInputs
     , resolver = 1
     , selectedPile = Nothing
     , server = makeProxyServer ServerResponse
+    , gameid = ""
     }
 
 init : ( Model, Cmd Msg )
 init =
-    ( initialModel, Cmd.none )
+    ( initialModel
+    , send initialModel.server <| NewReq { players = initialModel.players }
+    )
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -169,7 +169,7 @@ update msg model =
         NodeClick nodeName ->
             case model.selectedPile of
                 Nothing ->
-                    if (model.phase == ResolutionPhase) ||
+                    if (model.phase /= PlacementPhase) ||
                         (String.all Char.isDigit nodeName) then
                         ( model, Cmd.none )
                     else
@@ -205,9 +205,36 @@ update msg model =
                     else
                         maybeMakeMove pile.nodeName p model
         ServerResponse server message ->
-            ( { model | server = server }
-            , Cmd.none
-            )
+            serverResponse model server message
+
+serverResponse : Model -> ServerInterface Msg -> Message -> (Model, Cmd Msg)
+serverResponse mod server message =
+    let model = { mod | server = server }
+    in
+        case log "message" message of
+            NewRsp { gameid } ->
+                ( { model | gameid = gameid }
+                , send server <| JoinReq { gameid = gameid, name = "bill" }
+                )
+            JoinRsp { gameid, number } ->
+                ( model
+                , if number < model.players then
+                      send server <| JoinReq { gameid = gameid, name = "bill" }
+                  else
+                      Cmd.none
+                )
+            PlacephaseRsp { gameid, turn, resolver } ->
+                ( { model
+                      | phase = PlacementPhase
+                      , turn = turn
+                      , resolver = resolver
+                  }
+                , Cmd.none
+                )
+            _ ->
+                ( model
+                , Cmd.none
+                )
 
 undoMove : Model -> (Model, Cmd Msg)
 undoMove model =
@@ -268,7 +295,7 @@ undoMove model =
                             , Cmd.none
                             )
 
-resolution : Maybe Move -> DisplayList -> Model -> History -> (Int, Phase, History)
+resolution : Maybe Move -> DisplayList -> Model -> History -> (Int, ServerPhase, History)
 resolution maybeMove displayList model history =
     let resolved = displayList.unresolvedPiles == []
         resolver = if resolved then
@@ -362,6 +389,13 @@ canPlace model =
         Just _ ->
             True
 
+joinLine : Model -> Html Msg
+joinLine model =
+    span []
+        [ text "Waiting for players to join. "
+        , button [ disabled True ] [ text "Place" ]
+        ]
+
 placementLine : Model -> Html Msg
 placementLine model =
     span []
@@ -420,6 +454,7 @@ renderGamePage model =
         [ inputItems model
         , p []
             [ case model.phase of
+                  JoinPhase -> joinLine model
                   PlacementPhase -> placementLine model
                   ResolutionPhase -> resolutionLine model
             ]
@@ -590,7 +625,7 @@ inputItem player model =
         [ b [ text <| (toString player) ++ ": " ]
         , input [ type_ "text"
                 , onInput <| SetInput player
-                , disabled <| model.phase == ResolutionPhase
+                , disabled <| model.phase /= PlacementPhase
                 , placeholder
                       <| if player == model.lastFocus &&
                           model.phase == PlacementPhase

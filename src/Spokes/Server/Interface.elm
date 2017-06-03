@@ -60,7 +60,7 @@ proxyCmd ((ServerInterface interface) as si) messages =
         wrapper = interface.wrapper si
         cmds = List.map (Task.perform wrapper) tasks
     in
-        Cmd.batch cmds
+        Cmd.batch <| List.reverse cmds --I shouldn't have to reverse here
 
 proxySender : ServerInterface msg -> Message -> Cmd msg
 proxySender (ServerInterface interface) message =
