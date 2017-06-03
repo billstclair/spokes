@@ -17,7 +17,7 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , StonePile, Color(..)
                                       , Turn, History
                                       , ServerPhase(..), ServerInterface, Message(..)
-                                      , movedStoneString
+                                      , movedStoneString, butLast
                                       )
 import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , computeDisplayList, findResolution
@@ -37,6 +37,7 @@ import Html.Attributes exposing ( value, size, maxlength, href, src, title
 import Html.Events exposing ( onClick, onInput, onFocus )
 import Array exposing ( Array )
 import Char
+import List.Extra as LE
 import Debug exposing ( log )
 
 main =
@@ -137,35 +138,16 @@ update msg model =
             undoMove model
         Place ->
             case getPlacements model of
-                Nothing ->
+                Just (move :: _) ->
+                    ( model
+                    , send model.server
+                        <| PlaceReq { gameid = model.gameid
+                                    , placement = move
+                                    , number = 1
+                                    }
+                    )
+                _ ->
                     ( model, Cmd.none )
-                Just moves ->
-                    let board = List.foldr makeMove model.board moves
-                        his = case model.history of
-                                  [] ->
-                                      -- won't happen
-                                      let turn = newTurn 1 1
-                                      in
-                                          [{ turn | placements = moves}]
-                                  turn :: tail ->
-                                      { turn | placements = moves }
-                                      :: tail
-                        displayList = computeDisplayList
-                                      board model.renderInfo
-                        (resolver, phase, history)
-                            = resolution Nothing displayList model his
-                    in
-                        ( { model
-                              | history = history
-                              , board = board
-                              , resolver = resolver
-                              , phase = phase
-                              , lastFocus = 1
-                              , displayList = displayList
-                              , inputs = initialInputs
-                          }
-                          , Cmd.none
-                        )
         NodeClick nodeName ->
             case model.selectedPile of
                 Nothing ->
@@ -231,6 +213,141 @@ serverResponse mod server message =
                   }
                 , Cmd.none
                 )
+            PlaceRsp { gameid, number } ->
+                if number < model.players then
+                    case getPlacements model of
+                        Nothing ->
+                            (model, Cmd.none)
+                        Just placements ->
+                            case LE.getAt number placements of
+                                Nothing ->
+                                    (model, Cmd.none)
+                                Just placement ->
+                                    ( model
+                                    , send model.server
+                                        <| PlaceReq { gameid = gameid
+                                                    , placement = placement
+                                                    , number = number + 1
+                                                    }
+                                    )
+                else
+                    (model, Cmd.none)
+            PlacedRsp { gameid, placements } ->
+                let board = List.foldr makeMove model.board placements
+                    his = case model.history of
+                              [] ->
+                                  -- won't happen
+                                  let turn = newTurn 1 1
+                                  in
+                                      [{ turn | placements = placements }]
+                              turn :: tail ->
+                                  { turn | placements = placements }
+                                  :: tail
+                    displayList = computeDisplayList
+                                  board model.renderInfo
+                    (resolver, phase, history)
+                        = resolution Nothing displayList model his
+                in
+                    ( { model
+                          | history = history
+                          , board = board
+                          , resolver = resolver
+                          , phase = phase
+                          , lastFocus = 1
+                          , displayList = displayList
+                          , inputs = initialInputs
+                      }
+                    , Cmd.none
+                    )
+            ResolveRsp record ->
+                let move = record.resolution
+                    board = makeMove move model.board
+                    displayList = computeDisplayList board model.renderInfo
+                    (resolver, phase, history) =
+                        resolution (Just move) displayList model model.history
+                in
+                    ( { model
+                          | history = history
+                          , board = board
+                          , displayList = displayList
+                          , selectedPile = Nothing
+                          , resolver = resolver
+                          , phase = phase
+                      }
+                    , Cmd.none
+                    )
+            UndoRsp record ->
+                case record.message of
+                    PlacedRsp { placements } ->
+                        let board = List.foldr Board.undoMove model.board placements
+                            his = case model.history of
+                                      [] ->
+                                          []
+                                      turn :: tail ->
+                                          if turn.placements == [] then
+                                              case tail of
+                                                  [] ->
+                                                      []
+                                                  trn :: tl ->
+                                                      { trn | placements = [] }
+                                                          :: tl
+                                          else
+                                              { turn | placements = [] } :: tail
+                            dl = computeDisplayList board model.renderInfo
+                        in
+                            ( { model
+                                  | board = board
+                                  , displayList = dl
+                                  , history = his
+                                  , phase = PlacementPhase
+                              }
+                            , Cmd.none
+                            )
+                    ResolveRsp { resolution } ->
+                        let board = Board.undoMove resolution model.board
+                            default = (\_ ->
+                                           ([], model.turn, model.resolver)
+                                      )
+                            (his, turn, resolver) =
+                                case model.history of
+                                      [] ->
+                                          default () --can't happen
+                                      head :: tail ->
+                                          case head.resolutions of
+                                              [] ->
+                                                  case tail of
+                                                      [] ->
+                                                          default () --can't happen
+                                                      hd :: tl ->
+                                                          ( { hd | resolutions =
+                                                                  butLast
+                                                                  hd.resolutions
+                                                            } :: tl
+                                                          , hd.number
+                                                          , hd.resolver
+                                                          )
+                                              resolutions ->
+                                                  ( { head
+                                                        | resolutions =
+                                                          butLast resolutions
+                                                    } :: tail
+                                                  , model.turn
+                                                  , model.resolver
+                                                  )
+                            dl = computeDisplayList board model.renderInfo
+                        in
+                            ( { model
+                                  | board = board
+                                  , displayList = dl
+                                  , history = his
+                                  , phase = ResolutionPhase
+                                  , turn = turn
+                                  , resolver = resolver
+                              }
+                            , Cmd.none
+                            )
+                    _ ->
+                        (model, Cmd.none)
             _ ->
                 ( model
                 , Cmd.none
@@ -253,47 +370,35 @@ undoMove model =
                                     [] ->
                                         (model, Cmd.none)
                                     { number, resolver } :: _ ->
-                                        undoMove { model
-                                                     | turn = number
-                                                     , resolver = resolver
-                                                     , history = tail
-                                                 }
+                                        let (_, cmd) = undoMove
+                                                       { model
+                                                           | turn = number
+                                                           , resolver = resolver
+                                                           , history = tail
+                                                       }
+                                        in
+                                            (model, cmd)
                             _ ->
-                                let b = List.foldr Board.undoMove board placements
-                                    his = { number = number
-                                          , resolver = resolver
-                                          , placements = []
-                                          , resolutions = []
-                                          }
-                                          :: tail
-                                    dl = computeDisplayList b model.renderInfo
-                                in
-                                    ( { model
-                                          | board = b
-                                          , displayList = dl
-                                          , history = his
-                                          , phase = PlacementPhase
-                                      }
-                                    , Cmd.none
-                                    )
-                    res :: restail ->
-                        let b = Board.undoMove res board
-                            his = { number = number
-                                  , resolver = resolver
-                                  , placements = placements
-                                  , resolutions = List.reverse restail
-                                  }
-                                  :: tail
-                            dl = computeDisplayList b model.renderInfo
-                        in
-                            ( { model
-                                  | board = b
-                                  , displayList = dl
-                                  , history = his
-                                  , phase = ResolutionPhase
-                              }
-                            , Cmd.none
-                            )
+                                ( model
+                                , send model.server
+                                    <| UndoReq { gameid = model.gameid
+                                               , message =
+                                                   PlacedRsp
+                                                   { gameid = model.gameid
+                                                   , placements = placements
+                                                   }
+                                               }
+                                )
+                    resolution :: _ ->
+                        ( model
+                        , send model.server
+                            <| UndoReq { gameid = model.gameid
+                                       , message =
+                                           ResolveRsp { gameid = model.gameid
+                                                      , resolution = resolution
+                                                      }
+                                       }
+                        )
 
 resolution : Maybe Move -> DisplayList -> Model -> History -> (Int, ServerPhase, History)
 resolution maybeMove displayList model history =
@@ -332,21 +437,12 @@ maybeMakeMove nodeName pile model =
         Nothing ->
             ( model, Cmd.none )
         Just move ->
-            let board = makeMove move model.board
-                displayList = computeDisplayList board model.renderInfo
-                (resolver, phase, history) =
-                    resolution (Just move) displayList model model.history
-            in
-                ( { model
-                      | history = history
-                      , board = board
-                      , displayList = displayList
-                      , selectedPile = Nothing
-                      , resolver = resolver
-                      , phase = phase
-                  }
-                , Cmd.none
-                )
+            ( model
+            , send model.server
+                <| ResolveReq { gameid = model.gameid
+                              , resolution = move
+                              }
+            )
 
 br : Html Msg
 br =

@@ -19,6 +19,7 @@ import Spokes.Server.Error exposing ( ServerError(..), errnum )
 import Spokes.Types exposing ( Board, DisplayList, Move(..), StonePile, RenderInfo
                              , History, Message(..)
                              , ServerPhase(..), ServerState, ServerInterface(..)
+                             , butLast
                              )
 import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
                              , getNode, isLegalMove, makeMove, undoMove
@@ -126,7 +127,7 @@ processServerMessage state message =
                 Nothing ->
                     joinReq state message gameid name
         PlaceReq { gameid, placement, number } ->
-            case checkGameid state message gameid JoinPhase of
+            case checkGameid state message gameid PlacementPhase of
                 Just err ->
                     (state, [err])
                 Nothing ->
@@ -278,7 +279,7 @@ isLegalResolution : Move -> List StonePile -> Bool
 isLegalResolution move piles =
     case move of
         Resolution _ from _ ->
-            case LE.find (\pil -> pil.nodeName == from) piles of
+            case LE.find (\pile -> pile.nodeName == from) piles of
                 Nothing ->
                     False
                 Just pile ->
@@ -358,16 +359,6 @@ resolveReq state message gameid resolution =
             ( state
             , [errorRsp message IllegalRequestErr "Non-placement move"]
             )
-
-butLast : List a -> List a
-butLast list =
-    case list of
-        [_] ->
-            list
-        _ :: tail ->
-            butLast tail
-        [] ->
-            list
 
 undoReq : ServerState -> Message -> String -> Message -> (ServerState, List Message)
 undoReq state mess originalGameid undoMessage =

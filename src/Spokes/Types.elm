@@ -17,7 +17,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , Message(..)
                              , ServerState, ServerInterface(..), ServerPhase(..)
                              , zeroPoint, emptyStonePile, emptyDisplayList
-                             , get, set
+                             , get, set, butLast
                              , movedStoneString, stringToMovedStone
                              )
 
@@ -171,6 +171,21 @@ get key plist =
 set : String -> a -> XPlist a -> XPlist a
 set key value plist =
     (key, value) :: (List.filter (\(k,_) -> k /= key) plist)
+
+butLast : List a -> List a
+butLast list =
+    let loop = (\l res ->
+                    case l of
+                        [_] ->
+                            List.reverse res
+                        head :: tail ->
+                            loop tail <| head :: res
+                        [] ->
+                            []
+               )
+    in
+        loop list []
+                    
 
 ---
 --- Backend interface
