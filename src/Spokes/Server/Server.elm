@@ -4,6 +4,7 @@ import Spokes.Server.EncodeDecode exposing ( encodeMessage, decodeMessage )
 import Spokes.Server.Interface exposing ( emptyServerState, send
                                         , processServerMessage
                                         )
+import Spokes.Server.Error exposing ( ServerError(..), errnum )
 import Spokes.Types exposing ( Message(..), ServerState )
 
 import Platform exposing ( Program )
@@ -35,7 +36,7 @@ port outputPort : Encode.Value -> Cmd msg
 type alias Model =
     { stateDict : Dict Gameid ServerState
     , socketDict : Dict Gameid (List Socket)
-    , gameidDict : Dict Socket Gameid
+    , gameidDict : Dict Socket (Gameid, Int)
     , seed : Seed
     }
 
@@ -90,36 +91,7 @@ update message model =
       , Cmd.none
       )
     Disconnection socket ->
-        let (socketDict, stateDict) =
-                case Dict.get socket model.gameidDict of
-                    Nothing ->
-                        (model.socketDict, model.stateDict)
-                    Just gameid ->
-                        let sckd = model.socketDict
-                        in
-                            case Dict.get gameid sckd of
-                                Nothing ->
-                                    (sckd, model.stateDict)
-                                Just sockets ->
-                                    let socks = List.filter (\s -> s /= socket)
-                                                sockets
-                                    in
-                                        if socks == [] then
-                                            ( Dict.remove gameid sckd
-                                            , Dict.remove gameid model.stateDict
-                                            )
-                                        else
-                                            ( Dict.insert gameid socks sckd
-                                            , model.stateDict
-                                            )                                 
-        in
-            ( { model
-                  | gameidDict = Dict.remove socket model.gameidDict
-                  , socketDict = socketDict
-                  , stateDict = stateDict
-              }
-            , Cmd.none
-            )
+        disconnection model socket
     SocketMessage socket message ->
         socketMessage model socket message
     Tick time ->
@@ -130,13 +102,179 @@ update message model =
             )
     Noop -> (model, Cmd.none)
 
+disconnection : Model -> Socket -> (Model, Cmd Msg)
+disconnection model socket =
+    let (socketDict, stateDict) =
+            case Dict.get socket model.gameidDict of
+                Nothing ->
+                    (model.socketDict, model.stateDict)
+                Just (gameid, _) ->
+                    let sckd = model.socketDict
+                    in
+                        case Dict.get gameid sckd of
+                            Nothing ->
+                                (sckd, model.stateDict)
+                            Just sockets ->
+                                let socks = List.filter (\s -> s /= socket)
+                                            sockets
+                                in
+                                    if socks == [] then
+                                        ( Dict.remove gameid sckd
+                                        , Dict.remove gameid model.stateDict
+                                        )
+                                    else
+                                        ( Dict.insert gameid socks sckd
+                                        , model.stateDict
+                                        )                                 
+    in
+        ( { model
+              | gameidDict = Dict.remove socket model.gameidDict
+              , socketDict = socketDict
+              , stateDict = stateDict
+          }
+        , Cmd.none
+        )
+
 socketMessage : Model -> Socket -> String -> (Model, Cmd Msg)
-socketMessage model socket message =
-      ( model
-      , Cmd.none
---      , WSS.sendToMany outputPort message model.sockets
---          |> Cmd.batch
-      )
+socketMessage model socket request =
+    case decodeMessage request of
+        Err msg ->
+            let response = ErrorRsp { request = request
+                                    , id = errnum UnparsableJsonErr
+                                    , text = "Can't parse request"
+                                    }
+            in
+                ( model
+                , WSS.sendToOne outputPort (encodeMessage response) socket
+                )
+        Ok message ->
+            case checkPlayerNumber socket model message of
+                Just errrsp ->
+                    ( model
+                    , WSS.sendToOne outputPort (encodeMessage errrsp) socket
+                    )
+                Nothing ->
+                    let state = case Dict.get socket model.gameidDict of
+                                    Just (gameid, _) ->
+                                        Maybe.withDefault emptyServerState
+                                            <| Dict.get gameid model.stateDict
+                                    _ ->
+                                        emptyServerState
+                        (state2, responses) = processServerMessage state message
+                    in
+                        processResponses model socket state2 responses
+
+getSocketGameid : Socket -> Model -> Maybe (Gameid, Int)
+getSocketGameid socket model =
+    Dict.get socket model.gameidDict
+
+getSocketState : Socket -> Model -> Maybe ServerState
+getSocketState socket model =
+    case getSocketGameid socket model of
+        Nothing ->
+            Nothing
+        Just (gameid, _) ->
+            Dict.get gameid model.stateDict
+
+wrongPlayerNumber : Int -> Message -> Message
+wrongPlayerNumber number message =
+    ErrorRsp { request = encodeMessage message
+             , id = errnum WrongPlayerNumberErr
+             , text = "Player number should be: " ++ (toString number)
+             }
+
+checkPlayerNumber : Socket -> Model -> Message -> Maybe Message
+checkPlayerNumber socket model message =
+    case (case message of
+              PlaceReq { number } ->
+                  Just number
+              ChatReq { number } ->
+                  Just number
+              ResolveReq _ ->
+                  case getSocketState socket model of
+                      Nothing ->
+                          Nothing
+                      Just state ->
+                          Just state.resolver
+              _ ->
+                  Nothing
+         )
+    of
+        Nothing ->
+            Nothing
+        Just number ->
+            case getSocketGameid socket model of
+                Nothing ->
+                    Just <| wrongPlayerNumber number message
+                Just (_, was) ->
+                    if number /= was then
+                        Just <| wrongPlayerNumber number message
+                    else
+                        Nothing              
+
+processResponses : Model -> Socket -> ServerState -> List Message -> (Model, Cmd Msg)
+processResponses model socket state responses =
+    case responses of
+        (NewRsp _) :: _ ->
+            let (gameid, model2) = newGameid model
+                model3 = { model2
+                             | gameidDict =
+                               Dict.insert socket (gameid, 1) model2.gameidDict
+                             , socketDict =
+                               Dict.insert gameid [socket] model2.socketDict
+                             , stateDict =
+                               Dict.insert gameid state model2.stateDict
+                         }
+                response = NewRsp { gameid = gameid }
+            in
+                ( model3
+                , WSS.sendToOne outputPort (encodeMessage response) socket
+                )
+        (JoinRsp { gameid, number } as message) :: _ ->
+             let sockets = case Dict.get gameid model.socketDict of
+                               Nothing ->
+                                   [socket] --can't happen
+                               Just socks ->
+                                   socket :: socks
+                 model2 = { model
+                              | gameidDict =
+                                Dict.insert socket (gameid, number) model.gameidDict
+                              , socketDict =
+                                Dict.insert gameid sockets model.socketDict
+                              , stateDict =
+                                Dict.insert gameid state model.stateDict
+                          }
+             in
+                 ( model2
+                 , WSS.sendToMany outputPort (encodeMessage message) sockets
+                     |> Cmd.batch
+                 )
+        _ ->
+            let (model2, sockets) =
+                    case getSocketGameid socket model of
+                        Nothing ->
+                            (model, [socket])
+                        Just (gameid, _) ->
+                            ( { model | stateDict =
+                                    Dict.insert gameid state model.stateDict
+                              }
+                            , case Dict.get gameid model.socketDict of
+                                  Nothing ->
+                                      [socket]
+                                  Just socks ->
+                                      socks
+                            )
+            in
+                let cmds = List.map (\msg ->
+                                         WSS.sendToMany outputPort
+                                             (encodeMessage msg) sockets
+                                         |> Cmd.batch
+                                    )
+                           responses
+                in
+                    ( model2
+                    , Cmd.batch <| List.reverse cmds
+                    )
 
 -- SUBSCRIPTIONS
 

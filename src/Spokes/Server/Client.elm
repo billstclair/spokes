@@ -100,6 +100,7 @@ view model =
         [ A.type_ "text"
         , A.placeholder "Message..."
         , A.value model.input
+        , A.size 50
         , E.onInput InputMessage
         , onEnter SubmitMessage
         ]

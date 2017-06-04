@@ -111,7 +111,10 @@ processServerMessage state message =
         -- Basic game play
         NewReq { players } ->
             if players == 2 || players == 4 then
-                let st2 = { emptyServerState | players = players }
+                let st2 = { emptyServerState
+                              | players = players
+                              , resolver = 2 --auto-join
+                          }
                     msg = NewRsp { gameid = st2.gameid }
                 in
                     -- The non-proxy server will generate a new gameid
