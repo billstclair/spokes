@@ -1,0 +1,4 @@
+#!/bin/bash
+
+elm make ../src/Spokes/Server/$1.elm --output /dev/null
+
