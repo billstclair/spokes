@@ -195,20 +195,20 @@ type Message
     = RawMessage String String (List (String, String))
     -- Basic game play
     | NewReq { players : Int, name : String }
-    | NewRsp { gameid : String, players : Int, name : String }
+    | NewRsp { gameid : String, playerid : String, players : Int, name : String }
     | JoinReq { gameid : String, name : String }
-    | JoinRsp { gameid : String, name : String, number : Int }
-    | PlaceReq { gameid : String, placement : Move, number : Int }
+    | JoinRsp { gameid : String, name : String, playerid: Maybe String, number : Int }
+    | PlaceReq { playerid : String, placement : Move }
     | PlaceRsp { gameid : String, number : Int }
     | PlacedRsp { gameid : String, placements : List Move }
-    | ResolveReq { gameid : String, resolution : Move }
+    | ResolveReq { playerid : String, resolution : Move }
     | ResolveRsp { gameid : String, resolution : Move }
     -- Errors
-    | UndoReq { gameid : String, message: Message }
+    | UndoReq { playerid : String, message: Message }
     | UndoRsp { gameid : String, message: Message }
     | ErrorRsp { request : String, id : Int, text : String }
     -- Chat
-    | ChatReq { gameid : String, text : String, number : Int }
+    | ChatReq { playerid : String, text : String }
     | ChatRsp { gameid : String, text : String, number : Int }
 
 type ServerPhase

@@ -38,6 +38,7 @@ type alias MessageParams =
     , rsp : Maybe String
     , players : Maybe Int
     , gameid : Maybe String
+    , playerid : Maybe String
     , name : Maybe String
     , number : Maybe Int
     , turn : Maybe Int
@@ -59,6 +60,7 @@ rawMessageToParams message =
                  , rsp = if typ == "rsp" then Just msg else Nothing
                  , players = maybeInt <| get "players" plist
                  , gameid = get "gameid" plist
+                 , playerid = get "playerid" plist
                  , name = get "name" plist
                  , number = maybeInt <| get "number" plist
                  , turn = maybeInt <| get "turn" plist
@@ -187,62 +189,53 @@ parseRequest msg params rawMessage =
                     _ ->
                         rawMessage
         "place" ->
-            let { gameid, placement, number } = params
+            let { playerid, placement } = params
             in
-                case gameid of
+                case playerid of
                     Nothing ->
                         rawMessage
-                    Just gid ->
+                    Just pid ->
                         case placement of
                             Nothing ->
                                 rawMessage
                             Just p ->
-                                case number of
-                                    Nothing ->
-                                        rawMessage
-                                    Just num ->
-                                        PlaceReq { gameid = gid
-                                                 , placement = p
-                                                 , number = num
+                                PlaceReq { playerid = pid
+                                         , placement = p
                                          }
         "resolve" ->
-            let { gameid, resolution } = params
+            let { playerid, resolution } = params
             in
-                case gameid of
+                case playerid of
                     Nothing ->
                         rawMessage
-                    Just gid ->
+                    Just pid ->
                         case resolution of
                             Nothing ->
                                 rawMessage
                             Just res ->
-                                ResolveReq { gameid = gid
+                                ResolveReq { playerid = pid
                                            , resolution = res
                                            }
         "undo" ->
-            let { gameid, message } = params
+            let { playerid, message } = params
             in
-                case gameid of
+                case playerid of
                     Nothing ->
                         rawMessage
-                    Just gid ->
+                    Just pid ->
                         case message of
                             Nothing ->
                                 rawMessage
                             Just mes ->
-                                UndoReq { gameid = gid
+                                UndoReq { playerid = pid
                                         , message = mes
                                         }
         "chat" ->
-            let { gameid, text, number } = params
+            let { playerid, text } = params
             in
-                case number of
-                    Just num ->
-                        case allStrings [ gameid, text ] of
-                            Just [ gid, tex ] ->
-                                ChatReq { gameid = gid, text = tex, number = num }
-                            _ ->
-                                rawMessage
+                case allStrings [ playerid, text ] of
+                    Just [ pid, tex ] ->
+                        ChatReq { playerid = pid, text = tex }
                     _ ->
                         rawMessage
         _ ->
@@ -252,30 +245,32 @@ parseResponse : String -> MessageParams -> Message -> Message
 parseResponse msg params rawMessage =
     case msg of
         "new" ->
-            let { gameid, players, name } = params
+            let { gameid, playerid, players, name } = params
             in
-                case allStrings [gameid, name] of
-                    Just [gid, n] ->
+                case allStrings [gameid, playerid, name] of
+                    Just [gid, pid, n] ->
                         case players of
                             Nothing ->
                                 rawMessage
                             Just p ->
                                 NewRsp { gameid = gid
+                                       , playerid = pid
                                        , players = p
                                        , name = n
                                        }
                     _ ->
                         rawMessage
         "join" ->
-            let { gameid, name, number } = params
+            let { gameid, name, playerid, number } = params
             in
                 case number of
                     Nothing ->
                         rawMessage
                     Just num ->
-                        case allStrings [ gameid, name ] of
+                        case allStrings [gameid, name] of
                             Just [gid, n] ->
                                 JoinRsp { gameid = gid
+                                        , playerid = playerid
                                         , name = n
                                         , number = num}
                             _ ->
@@ -409,22 +404,28 @@ messageEncoder message =
             messageValue "req" "new" [ ("players", toString players)
                                      , ("name", name)
                                      ]
-        NewRsp { gameid, players, name } ->
+        NewRsp { gameid, playerid, players, name } ->
             messageValue "rsp" "new" [ ("gameid", gameid)
+                                     , ("playerid", playerid)
                                      , ("players", toString players)
                                      , ("name", name)
                                      ]
         JoinReq { gameid, name } ->
             messageValue "req" "join" [("gameid", gameid), ("name", name)]
-        JoinRsp { gameid, name, number } ->
-            messageValue "rsp" "join" [ ("gameid", gameid)
-                                      , ("name", name)
-                                      , ("number", toString number)
-                                      ]
-        PlaceReq { gameid, placement, number } ->
-            messageValue "req" "place" [ ("gameid", gameid)
+        JoinRsp { gameid, name, playerid, number } ->
+            messageValue "rsp" "join"
+                <| List.concat
+                    [ [ ("gameid", gameid)
+                      , ("name", name)
+                      ]
+                    , case playerid of
+                          Nothing -> []
+                          Just pid -> [ ("playerid", pid) ]
+                    , [ ("number", toString number) ]
+                    ]
+        PlaceReq { playerid, placement } ->
+            messageValue "req" "place" [ ("playerid", playerid)
                                        , ("placement", placementText placement)
-                                       , ("number", toString number)
                                        ]
         PlaceRsp { gameid, number } ->
             messageValue "rsp" "place" [ ("gameid", gameid)
@@ -438,10 +439,10 @@ messageEncoder message =
                                                placementText placements
                                           )
                                         ]
-        ResolveReq { gameid, resolution } ->
+        ResolveReq { playerid, resolution } ->
             let (color, from, to) = resolutionToStrings resolution
             in
-                messageValue "req" "resolve" [ ("gameid", gameid)
+                messageValue "req" "resolve" [ ("playerid", playerid)
                                              , ("color", color)
                                              , ("from", from)
                                              , ("to", to)
@@ -455,8 +456,8 @@ messageEncoder message =
                                              , ("to", to)
                                              ]
         -- Errors
-        UndoReq { gameid, message } ->
-            messageValue "req" "undo" [ ("gameid", gameid)
+        UndoReq { playerid, message } ->
+            messageValue "req" "undo" [ ("playerid", playerid)
                                       , ("message", encodeMessage message)
                                       ]
         UndoRsp { gameid, message } ->
@@ -469,10 +470,9 @@ messageEncoder message =
                                        , ("text", text)
                                        ]
         -- Chat
-        ChatReq { gameid, text, number } ->
-            messageValue "req" "chat" [ ("gameid", gameid)
+        ChatReq { playerid, text } ->
+            messageValue "req" "chat" [ ("playerid", playerid)
                                       , ("text", text)
-                                      , ("number", toString number)
                                       ]
         ChatRsp { gameid, text, number } ->
             messageValue "rsp" "chat" [ ("gameid", gameid)

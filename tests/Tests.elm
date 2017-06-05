@@ -7,8 +7,8 @@ import Dict
 import Maybe exposing ( withDefault )
 
 import Spokes.Server.EncodeDecode as ED
-import Spokes.Types as Types exposing ( Move(..), Color(..), MovedStone(..),
-                                       Message(..)
+import Spokes.Types as Types exposing ( Move(..), Color(..), MovedStone(..)
+                                      , Message(..)
                                       )
 
 log = Debug.log
@@ -60,22 +60,22 @@ protocolData : List Message
 protocolData =
     [ RawMessage "foo" "bar" [("bletch", "gronk"), ("1", "2")]
     , NewReq { players = 2, name = "Fred" }
-    , NewRsp { gameid = "asdf", players = 4, name = "John" }
+    , NewRsp { gameid = "asdf", playerid = "p1", players = 4, name = "John" }
     , JoinReq { gameid = "asdf", name = "bill" }
-    , JoinRsp { gameid = "asdf", name = "bill", number = 1 }
-    , PlaceReq { gameid = "asdf", placement = Placement White "C1", number = 1 }
-    , PlaceReq { gameid = "asdf", placement = Placement Black "D1", number = 2 }
+    , JoinRsp { gameid = "asdf", playerid = Just "p1", name = "bill", number = 1 }
+    , PlaceReq { playerid = "p1", placement = Placement White "C1" }
+    , PlaceReq { playerid = "p2", placement = Placement Black "D1" }
     , PlaceRsp { gameid = "asdf", number = 2 }
     , PlacedRsp { gameid = "asdf"
                 , placements = [ Placement White "C1"
                                , Placement Black "D1"
                                ]
                 }
-    , ResolveReq { gameid = "asdf", resolution = Resolution MoveWhite "D1" "1" }
-    , ResolveReq { gameid = "asdf", resolution = Resolution MoveBlack "D2" "2" }
-    , ResolveReq { gameid = "asdf", resolution = Resolution MoveBlock "C3" "D3" }
+    , ResolveReq { playerid = "p1", resolution = Resolution MoveWhite "D1" "1" }
+    , ResolveReq { playerid = "p2", resolution = Resolution MoveBlack "D2" "2" }
+    , ResolveReq { playerid = "p1", resolution = Resolution MoveBlock "C3" "D3" }
     , ResolveRsp { gameid = "asdf", resolution = Resolution MoveBlock "C3" "D3" }
-    , UndoReq { gameid = "asdf"
+    , UndoReq { playerid = "p1"
               , message = PlacedRsp
                           { gameid = "asdf"
                           , placements = [ Placement White "C1"
@@ -90,6 +90,6 @@ protocolData =
                           }
               }
     , ErrorRsp { request = "foo", id = 1, text = "Malformed request." }
-    , ChatReq { gameid = "asdf", text = "Hello, World!", number = 1 }
+    , ChatReq { playerid = "p1", text = "Hello, World!" }
     , ChatRsp { gameid = "asdf", text = "Hello, World!", number = 1 }
     ]
