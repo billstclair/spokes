@@ -168,12 +168,16 @@ parseRequest : String -> MessageParams -> Message -> Message
 parseRequest msg params rawMessage =
     case msg of
         "new" ->
-            let { players } = params
+            let { players, name } = params
                 p = case players of
                         Nothing -> 2
                         Just ps -> ps
             in
-                NewReq { players = p }
+                case name of
+                    Nothing ->
+                        rawMessage
+                    Just n ->
+                        NewReq { players = p, name = n }
         "join" ->
             let { gameid, name } = params
             in
@@ -248,13 +252,20 @@ parseResponse : String -> MessageParams -> Message -> Message
 parseResponse msg params rawMessage =
     case msg of
         "new" ->
-            let { gameid } = params
+            let { gameid, players, name } = params
             in
-                case gameid of
-                    Nothing ->
+                case allStrings [gameid, name] of
+                    Just [gid, n] ->
+                        case players of
+                            Nothing ->
+                                rawMessage
+                            Just p ->
+                                NewRsp { gameid = gid
+                                       , players = p
+                                       , name = n
+                                       }
+                    _ ->
                         rawMessage
-                    Just gid ->
-                        NewRsp { gameid = gid }
         "join" ->
             let { gameid, name, number } = params
             in
@@ -269,26 +280,6 @@ parseResponse msg params rawMessage =
                                         , number = num}
                             _ ->
                                 rawMessage
-        "placephase" ->
-            let { gameid, turn, resolver } = params
-            in
-                case gameid of
-                    Nothing ->
-                        rawMessage
-                    Just gid ->
-                        case turn of
-                            Nothing ->
-                                rawMessage
-                            Just trn ->
-                                case resolver of
-                                    Nothing ->
-                                        rawMessage
-                                    Just res ->
-                                        PlacephaseRsp
-                                        { gameid = gid
-                                        , turn = trn
-                                        , resolver = res
-                                        }
         "place" ->
             let { gameid, number } = params
             in
@@ -414,10 +405,15 @@ messageEncoder message =
         RawMessage typ msg plist ->
             messageValue typ msg plist
         -- Basic game play
-        NewReq { players } ->
-            messageValue "req" "new" [("players", toString players)]
-        NewRsp { gameid } ->
-            messageValue "rsp" "new" [("gameid", gameid)]
+        NewReq { players, name } ->
+            messageValue "req" "new" [ ("players", toString players)
+                                     , ("name", name)
+                                     ]
+        NewRsp { gameid, players, name } ->
+            messageValue "rsp" "new" [ ("gameid", gameid)
+                                     , ("players", toString players)
+                                     , ("name", name)
+                                     ]
         JoinReq { gameid, name } ->
             messageValue "req" "join" [("gameid", gameid), ("name", name)]
         JoinRsp { gameid, name, number } ->
@@ -425,11 +421,6 @@ messageEncoder message =
                                       , ("name", name)
                                       , ("number", toString number)
                                       ]
-        PlacephaseRsp { gameid, turn, resolver } ->
-            messageValue "rsp" "placephase" [ ("gameid", gameid)
-                                            , ("turn", toString turn)
-                                            , ("resolver", toString resolver)
-                                            ]
         PlaceReq { gameid, placement, number } ->
             messageValue "req" "place" [ ("gameid", gameid)
                                        , ("placement", placementText placement)

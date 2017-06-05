@@ -6,8 +6,10 @@ import List
 import Dict
 import Maybe exposing ( withDefault )
 
-import Spokes.Server.EncodeDecode as ED exposing ( Message(..) )
-import Spokes.Types as Types exposing ( Move(..), Color(..), MovedStone(..) )
+import Spokes.Server.EncodeDecode as ED
+import Spokes.Types as Types exposing ( Move(..), Color(..), MovedStone(..),
+                                       Message(..)
+                                      )
 
 log = Debug.log
 
@@ -57,11 +59,10 @@ protocolTest message =
 protocolData : List Message
 protocolData =
     [ RawMessage "foo" "bar" [("bletch", "gronk"), ("1", "2")]
-    , NewReq { players = 2 }
-    , NewRsp { gameid = "asdf" }
+    , NewReq { players = 2, name = "Fred" }
+    , NewRsp { gameid = "asdf", players = 4, name = "John" }
     , JoinReq { gameid = "asdf", name = "bill" }
     , JoinRsp { gameid = "asdf", name = "bill", number = 1 }
-    , PlacephaseRsp { gameid = "asdf", turn = 2, resolver = 2 }
     , PlaceReq { gameid = "asdf", placement = Placement White "C1", number = 1 }
     , PlaceReq { gameid = "asdf", placement = Placement Black "D1", number = 2 }
     , PlaceRsp { gameid = "asdf", number = 2 }

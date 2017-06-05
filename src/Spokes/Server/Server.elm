@@ -160,9 +160,9 @@ socketMessage model socket request =
                                             <| Dict.get gameid model.stateDict
                                     _ ->
                                         emptyServerState
-                        (state2, responses) = processServerMessage state message
+                        (state2, response) = processServerMessage state message
                     in
-                        processResponses model socket state2 responses
+                        processResponse model socket state2 response
 
 getSocketGameid : Socket -> Model -> Maybe (Gameid, Int)
 getSocketGameid socket model =
@@ -212,25 +212,29 @@ checkPlayerNumber socket model message =
                     else
                         Nothing              
 
-processResponses : Model -> Socket -> ServerState -> List Message -> (Model, Cmd Msg)
-processResponses model socket state responses =
-    case responses of
-        (NewRsp _) :: _ ->
+processResponse : Model -> Socket -> ServerState -> Message -> (Model, Cmd Msg)
+processResponse model socket state response =
+    case response of
+        (NewRsp { players, name }) ->
             let (gameid, model2) = newGameid model
+                state2 = { state | gameid = gameid }
                 model3 = { model2
                              | gameidDict =
                                Dict.insert socket (gameid, 1) model2.gameidDict
                              , socketDict =
                                Dict.insert gameid [socket] model2.socketDict
                              , stateDict =
-                               Dict.insert gameid state model2.stateDict
+                               Dict.insert gameid state2 model2.stateDict
                          }
-                response = NewRsp { gameid = gameid }
+                response = NewRsp { gameid = gameid
+                                  , players = players
+                                  , name = name
+                                  }
             in
                 ( model3
                 , WSS.sendToOne outputPort (encodeMessage response) socket
                 )
-        (JoinRsp { gameid, number } as message) :: _ ->
+        JoinRsp { gameid, number } ->
              let sockets = case Dict.get gameid model.socketDict of
                                Nothing ->
                                    [socket] --can't happen
@@ -246,7 +250,7 @@ processResponses model socket state responses =
                           }
              in
                  ( model2
-                 , WSS.sendToMany outputPort (encodeMessage message) sockets
+                 , WSS.sendToMany outputPort (encodeMessage response) sockets
                      |> Cmd.batch
                  )
         _ ->
@@ -265,16 +269,10 @@ processResponses model socket state responses =
                                       socks
                             )
             in
-                let cmds = List.map (\msg ->
-                                         WSS.sendToMany outputPort
-                                             (encodeMessage msg) sockets
-                                         |> Cmd.batch
-                                    )
-                           responses
-                in
-                    ( model2
-                    , Cmd.batch <| List.reverse cmds
-                    )
+                ( model2
+                , WSS.sendToMany outputPort (encodeMessage response) sockets
+                    |> Cmd.batch
+                )
 
 -- SUBSCRIPTIONS
 

@@ -194,11 +194,10 @@ butLast list =
 type Message
     = RawMessage String String (List (String, String))
     -- Basic game play
-    | NewReq { players : Int }
-    | NewRsp { gameid : String }
+    | NewReq { players : Int, name : String }
+    | NewRsp { gameid : String, players : Int, name : String }
     | JoinReq { gameid : String, name : String }
     | JoinRsp { gameid : String, name : String, number : Int }
-    | PlacephaseRsp { gameid : String, turn : Int, resolver : Int }
     | PlaceReq { gameid : String, placement : Move, number : Int }
     | PlaceRsp { gameid : String, number : Int }
     | PlacedRsp { gameid : String, placements : List Move }

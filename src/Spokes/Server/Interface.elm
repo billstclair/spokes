@@ -29,6 +29,7 @@ import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
 import Dict exposing ( Dict )
 import Task
 import List.Extra as LE
+import Debug exposing ( log )
 
 emptyServerState : ServerState
 emptyServerState =
@@ -56,13 +57,12 @@ send : ServerInterface msg -> Message -> Cmd msg
 send ((ServerInterface interface) as si) message =
     interface.sender si message
 
-proxyCmd : ServerInterface msg -> List Message -> Cmd msg
-proxyCmd ((ServerInterface interface) as si) messages =
-    let tasks = List.map Task.succeed messages
+proxyCmd : ServerInterface msg -> Message -> Cmd msg
+proxyCmd ((ServerInterface interface) as si) message =
+    let task = Task.succeed message
         wrapper = interface.wrapper si
-        cmds = List.map (Task.perform wrapper) tasks
     in
-        Cmd.batch <| List.reverse cmds --I shouldn't have to reverse here
+      Task.perform wrapper task
 
 proxySender : ServerInterface msg -> Message -> Cmd msg
 proxySender (ServerInterface interface) message =
@@ -105,68 +105,70 @@ checkGameid state message gameid phase =
         err ->
             err
 
-processServerMessage : ServerState -> Message -> (ServerState, List Message)
+processServerMessage : ServerState -> Message -> (ServerState, Message)
 processServerMessage state message =
     case message of
         -- Basic game play
-        NewReq { players } ->
+        NewReq { players, name } ->
             if players == 2 || players == 4 then
                 let st2 = { emptyServerState
                               | players = players
                               , resolver = 2 --auto-join
                           }
-                    msg = NewRsp { gameid = st2.gameid }
+                    msg = NewRsp { gameid = st2.gameid
+                                 , players = players
+                                 , name = name
+                                 }
                 in
                     -- The non-proxy server will generate a new gameid
-                    (st2, [msg])
+                    (st2, msg)
             else
                 ( state
-                , [errorRsp message IllegalPlayerCountErr "Players must be 2 or 4"]
+                , errorRsp message IllegalPlayerCountErr "Players must be 2 or 4"
                 )
         JoinReq { gameid, name } ->
             case checkGameid state message gameid JoinPhase of
                 Just err ->
-                    (state, [err])
+                    (state, err)
                 Nothing ->
                     joinReq state message gameid name
         PlaceReq { gameid, placement, number } ->
             case checkGameid state message gameid PlacementPhase of
                 Just err ->
-                    (state, [err])
+                    (state, err)
                 Nothing ->
                     placeReq state message gameid placement number
         ResolveReq { gameid, resolution } ->
             case checkGameid state message gameid ResolutionPhase of
                 Just err ->
-                    (state, [err])
+                    (state, err)
                 Nothing ->
                     resolveReq state message gameid resolution
         -- Errors
         UndoReq { gameid, message } ->
             case checkOnlyGameid state message gameid of
                 Just err ->
-                    (state, [err])
+                    (state, err)
                 Nothing ->
                     undoReq state message gameid message
         -- Chat
         ChatReq { gameid, text, number } ->
             case checkOnlyGameid state message gameid of
                 Just err ->
-                    (state, [err])
+                    (state, err)
                 Nothing ->
                     ( state
-                    , [ ChatRsp { gameid = gameid
-                                , text = text
-                                , number = number
-                                }
-                      ]
+                    , ChatRsp { gameid = gameid
+                              , text = text
+                              , number = number
+                              }
                     )
         _ ->
             ( state
-            , [errorRsp message IllegalRequestErr "Illegal Request"]
+            , errorRsp message IllegalRequestErr "Illegal Request"
             )
 
-joinReq : ServerState -> Message -> String -> String -> (ServerState, List Message)
+joinReq : ServerState -> Message -> String -> String -> (ServerState, Message)
 joinReq state message gameid name =
     let player = state.resolver
         joinDone = (player == state.players)
@@ -194,19 +196,9 @@ joinReq state message gameid name =
                                   state.history
               }
     in
-        ( st2
-        , if joinDone then
-              [ msg
-              , PlacephaseRsp { gameid = gameid
-                              , turn = st2.turn
-                              , resolver = st2.resolver
-                              }
-              ]
-          else
-              [ msg ]
-        )
+        ( st2, msg )
 
-placeReq : ServerState -> Message -> String -> Move -> Int -> (ServerState, List Message)
+placeReq : ServerState -> Message -> String -> Move -> Int -> (ServerState, Message)
 placeReq state message gameid placement number =
     let placements = Dict.insert number placement state.placements
         placeRsp = PlaceRsp { gameid = gameid, number = number }
@@ -260,22 +252,20 @@ placeReq state message gameid placement number =
                               , history = history
                           }
                         , if done then
-                              [ placeRsp
-                              , PlacedRsp { gameid = gameid
-                                          , placements = placementsList
-                                          }
-                              ]
+                              PlacedRsp { gameid = gameid
+                                        , placements = placementsList
+                                        }
                           else
-                              [ placeRsp ]
+                              placeRsp
                         )
                 else
                     ( state
-                    , [errorRsp message IllegalRequestErr "Illegal Placement"]
+                    , errorRsp message IllegalRequestErr "Illegal Placement"
                     )
 
             _ ->
                 ( state
-                , [errorRsp message IllegalRequestErr "Non-placement move"]
+                , errorRsp message IllegalRequestErr "Non-placement move"
                 )
 
 isLegalResolution : Move -> List StonePile -> Bool
@@ -294,13 +284,13 @@ isLegalResolution move piles =
         _ ->
             False
 
-resolveReq : ServerState -> Message -> String -> Move -> (ServerState, List Message)
+resolveReq : ServerState -> Message -> String -> Move -> (ServerState, Message)
 resolveReq state message gameid resolution =
     case resolution of
         Resolution _ _ _ ->
             if not <| isLegalResolution resolution state.unresolvedPiles then
                 ( state
-                , [errorRsp message IllegalRequestErr "Illegal Resolution"]
+                , errorRsp message IllegalRequestErr "Illegal Resolution"
                 )
             else
                 let board = makeMove resolution state.board
@@ -348,22 +338,14 @@ resolveReq state message gameid resolution =
                           , resolver = resolver
                           , history = history
                       }
-                    , if done then
-                          [ resolveRsp
-                          , PlacephaseRsp { gameid = gameid
-                                          , turn = turn
-                                          , resolver = resolver
-                                          }
-                          ]
-                      else
-                          [ resolveRsp ]
+                    , resolveRsp
                     )
         _ ->
             ( state
-            , [errorRsp message IllegalRequestErr "Non-placement move"]
+            , errorRsp message IllegalRequestErr "Non-placement move"
             )
 
-undoReq : ServerState -> Message -> String -> Message -> (ServerState, List Message)
+undoReq : ServerState -> Message -> String -> Message -> (ServerState, Message)
 undoReq state mess originalGameid undoMessage =
     case state.history of
         turn :: tail ->
@@ -373,82 +355,92 @@ undoReq state mess originalGameid undoMessage =
                         turn.resolutions == [] &&
                         turn.placements == placements
                     then
-                        ( { state
-                              | board = List.foldl
-                                            undoMove state.board placements
-                              , phase = PlacementPhase
-                              , history = { turn | placements = [] } :: tail
-                          }
-                        , [ UndoRsp { gameid = gameid
-                                    , message = undoMessage
-                                    }
-                          ]
-                        )
+                        let board = List.foldl undoMove state.board placements
+                            displayList = computeDisplayList board state.renderInfo
+                            unresolvedPiles = displayList.unresolvedPiles
+                        in
+                            ( { state
+                                  | board = board
+                                  , unresolvedPiles = unresolvedPiles
+                                  , phase = PlacementPhase
+                                  , history = { turn | placements = [] } :: tail
+                              }
+                            , UndoRsp { gameid = gameid
+                                      , message = undoMessage
+                                      }
+                            )
                     else
                         ( state
-                        , [ errorRsp mess IllegalRequestErr
-                                "Placements don't match"
-                          ]
+                        , errorRsp mess IllegalRequestErr
+                            "Placements don't match"
                         )
                 ResolveRsp { gameid, resolution } ->
                     if turn.resolutions == [] then
                         if turn.placements == [] then
                             case tail of
                                 tturn :: _ ->
-                                    undoReq
-                                        { state
-                                            | phase = ResolutionPhase
-                                            , turn = tturn.number
-                                            , resolver = tturn.resolver
-                                            , history = tail
-                                        }
-                                        mess originalGameid undoMessage
+                                    let (st2, response) =
+                                            undoReq
+                                            { state
+                                                | phase = ResolutionPhase
+                                                , turn = tturn.number
+                                                , resolver = tturn.resolver
+                                                , history = tail
+                                            }
+                                            mess originalGameid undoMessage
+                                    in
+                                        case response of
+                                            ErrorRsp _ ->
+                                                (state, response)
+                                            _ ->
+                                                (st2, response)
                                 _ ->
                                     ( state
-                                    , [ errorRsp
-                                            mess IllegalRequestErr
-                                            "No matching history"
-                                      ]
+                                    , errorRsp
+                                        mess IllegalRequestErr "No matching history"
                                     )
                         else
                             ( state
-                            , [ errorRsp mess IllegalRequestErr
-                                    "Not resolution phase"
-                              ]
+                            , errorRsp mess IllegalRequestErr "Not resolution phase"
                             )
                     else
                         case LE.last turn.resolutions of
                             Nothing ->
                                 ( state
-                                , [ errorRsp mess IllegalRequestErr "Can't happen" ]
+                                , errorRsp mess IllegalRequestErr "Can't happen"
                                 )
                             Just res ->
                                 if res == resolution then
+                                    let board = undoMove resolution state.board
+                                        displayList =
+                                            computeDisplayList board state.renderInfo
+                                        unresolvedPiles =
+                                            displayList.unresolvedPiles
+                                    in
                                     ( { state
-                                          | history
+                                          | board = board
+                                          , unresolvedPiles = unresolvedPiles
+                                          , history
                                             = { turn
                                                   | resolutions =
                                                       butLast turn.resolutions
                                               } :: tail
                                       }
-                                    , [ UndoRsp { gameid = gameid
-                                                , message = undoMessage
-                                                }
-                                      ]
+                                    , UndoRsp { gameid = gameid
+                                              , message = undoMessage
+                                              }
                                     )
                                 else
                                     ( state
-                                    , [ errorRsp mess IllegalRequestErr
-                                            "No matching resolution"
-                                      ]
+                                    , errorRsp mess IllegalRequestErr
+                                        "No matching resolution"
                                     )
                 _ ->
                     ( state
-                    , [ errorRsp mess IllegalRequestErr
-                            "Can only undo placed and resolve responses."
-                      ]
+                    , errorRsp mess IllegalRequestErr
+                        "Can only undo placed and resolve responses."
                     )
         _ ->
             ( state
-            , [errorRsp mess IllegalRequestErr "No history"]
+            , errorRsp mess IllegalRequestErr "No history"
             )

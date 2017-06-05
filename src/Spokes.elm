@@ -56,6 +56,7 @@ type alias Model =
     , displayList : DisplayList
     , players : Int
     , newPlayers : Int
+    , playerNames : List (Int, String)
     , turn : Int
     , phase : ServerPhase
     , lastFocus : Int
@@ -87,6 +88,7 @@ initialModel =
     , displayList = emptyDisplayList
     , players = 2
     , newPlayers = 2
+    , playerNames = []
     , turn = 1
     , phase = JoinPhase
     , lastFocus = 1
@@ -101,7 +103,10 @@ initialModel =
 init : ( Model, Cmd Msg )
 init =
     ( initialModel
-    , send initialModel.server <| NewReq { players = initialModel.players }
+    , send initialModel.server
+        <| NewReq { players = initialModel.players
+                  , name = "Bill"
+                  }
     )
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -194,24 +199,35 @@ serverResponse mod server message =
     let model = { mod | server = server }
     in
         case log "message" message of
-            NewRsp { gameid } ->
-                ( { model | gameid = gameid }
-                , send server <| JoinReq { gameid = gameid, name = "bill" }
-                )
-            JoinRsp { gameid, number } ->
-                ( model
-                , if number < model.players then
-                      send server <| JoinReq { gameid = gameid, name = "bill" }
-                  else
-                      Cmd.none
-                )
-            PlacephaseRsp { gameid, turn, resolver } ->
+            NewRsp { gameid, name } ->
                 ( { model
-                      | phase = PlacementPhase
-                      , turn = turn
-                      , resolver = resolver
+                      | gameid = gameid
+                      , playerNames = [(1, name)]
                   }
-                , Cmd.none
+                , send server
+                    <| JoinReq { gameid = gameid, name = "bill" }
+                )
+            JoinRsp { gameid, number, name } ->
+                let done = number >= model.players
+                    cmd = if not done then
+                              send server
+                                  <| JoinReq { gameid = gameid, name = "bill" }
+                          else
+                              Cmd.none
+                    playerNames = (number, name) :: model.playerNames
+                in
+                ( if done then
+                      { model
+                          | playerNames = playerNames
+                          , phase = PlacementPhase
+                          , turn = 1
+                          , resolver = 1
+                      }
+                  else
+                      { model
+                          | playerNames = playerNames
+                      }
+                , cmd
                 )
             PlaceRsp { gameid, number } ->
                 if number < model.players then
