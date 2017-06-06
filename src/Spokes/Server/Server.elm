@@ -156,8 +156,7 @@ processResponse model socket state response =
         (NewRsp { gameid, playerid, players, name }) ->
             let (gid, model2) = newGameid model
                 (pid, model3) = newPlayerid model2
-                gameState = Dict.get gameid state.gameDict
-                state2 = case gameState of
+                state2 = case Dict.get gameid state.gameDict of
                              Nothing ->
                                  state --can't happen
                              Just gs ->
@@ -302,7 +301,7 @@ processResponse model socket state response =
                               Just socks ->
                                   socks
             in
-                ( model2
+                ( { model2 | state = state }
                 , sendToMany response sockets
                 )
 
