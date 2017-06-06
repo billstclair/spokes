@@ -14,8 +14,8 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , Color(..), MovedStone(..), NodeClassification(..)
                              , Move(..), Turn, History
                              , StonePile, DisplayList
-                             , Message(..)
-                             , ServerState, ServerInterface(..), ServerPhase(..)
+                             , Message(..), ServerPhase(..)
+                             , GameState, ServerState, ServerInterface(..)
                              , zeroPoint, emptyStonePile, emptyDisplayList
                              , get, set, butLast
                              , movedStoneString, stringToMovedStone
@@ -217,6 +217,12 @@ type ServerPhase
     | ResolutionPhase
 
 type alias ServerState =
+    { gameidDict : Dict String (String, Int) --playerid -> (gameid, number)
+    , playeridDict : Dict String (List String) -- gameid -> List playerid
+    , gameDict : Dict String GameState --gameid -> GameState
+    }
+
+type alias GameState =
     { board : Board
     , renderInfo : RenderInfo
     , phase : ServerPhase
@@ -226,7 +232,6 @@ type alias ServerState =
     , resolver : Int
     , placements : Dict Int Move
     , gameid : String
-    , playerNumbers : List (String, Int) --(playerid, number)
     , history : History
     }
 

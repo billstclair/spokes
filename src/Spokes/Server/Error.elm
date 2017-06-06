@@ -19,7 +19,7 @@ type ServerError
     = MalformedJsonErr
     | IllegalRequestErr
     | IllegalPlayerCountErr
-    | WrongGameidErr
+    | UnknownGameidErr
     | UnparsableJsonErr
     | BadPlayeridErr
 
@@ -28,7 +28,7 @@ errnums =
     [ (MalformedJsonErr, 1)
     , (IllegalRequestErr, 2)
     , (IllegalPlayerCountErr, 3)
-    , (WrongGameidErr, 4)
+    , (UnknownGameidErr, 4)
     , (UnparsableJsonErr, 5)
     , (BadPlayeridErr, 6)
     ]

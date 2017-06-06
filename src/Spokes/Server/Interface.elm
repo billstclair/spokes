@@ -18,8 +18,8 @@ import Spokes.Server.EncodeDecode exposing ( encodeMessage )
 import Spokes.Server.Error exposing ( ServerError(..), errnum )
 import Spokes.Types as Types
     exposing ( Board, DisplayList, Move(..), StonePile, RenderInfo
-             , History, Message(..)
-             , ServerPhase(..), ServerState, ServerInterface(..)
+             , History, Message(..), ServerPhase(..)
+             , GameState, ServerState, ServerInterface(..)
              , butLast
              )
 import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
@@ -34,6 +34,17 @@ import Debug exposing ( log )
 
 emptyServerState : ServerState
 emptyServerState =
+    { gameidDict = Dict.empty
+    , playeridDict = Dict.empty
+    , gameDict = Dict.empty
+    }
+
+dummyGameid : String
+dummyGameid =
+    "<gameid>"
+
+emptyGameState : GameState
+emptyGameState =
     { board = initialBoard
     , renderInfo = renderInfo 600
     , phase = JoinPhase
@@ -42,8 +53,7 @@ emptyServerState =
     , turn = 1
     , resolver = 1
     , placements = Dict.empty
-    , gameid = "<gameid>"
-    , playerNumbers = []
+    , gameid = dummyGameid
     , history = []
     }
 
@@ -87,41 +97,46 @@ phaseToString phase =
         PlacementPhase -> "placement"
         ResolutionPhase -> "resolution"
 
-checkOnlyGameid : ServerState -> Message -> String -> Maybe Message
+checkOnlyGameid : ServerState -> Message -> String -> Result Message GameState
 checkOnlyGameid state message gameid =
-    if gameid == state.gameid then
-        Nothing
-    else
-        Just <| errorRsp message WrongGameidErr "Wrong gameid"
+    case Dict.get gameid state.gameDict of
+        Just gameState ->
+            Ok gameState
+        Nothing ->
+            Err <| errorRsp message UnknownGameidErr "Unknown gameid"
 
-checkGameid : ServerState -> Message -> String -> ServerPhase -> Maybe Message
+checkGameid : ServerState -> Message -> String -> ServerPhase -> Result Message GameState
 checkGameid state message gameid phase =
     case checkOnlyGameid state message gameid of
-        Nothing ->
-            if phase == state.phase then
-                Nothing
+        Ok gameState as res ->
+            if phase == gameState.phase then
+                res
             else
-                Just
+                Err
                 <| errorRsp message IllegalRequestErr
                     ("Not " ++ (phaseToString phase) ++ " phase")
         err ->
             err
 
-checkOnlyPlayerid : ServerState -> Message -> String -> Result Message Int
+checkOnlyPlayerid : ServerState -> Message -> String -> Result Message (GameState, Int)
 checkOnlyPlayerid state message playerid =
-    case Types.get playerid state.playerNumbers of
+    case Dict.get playerid state.gameidDict of
         Nothing ->
             Err <| errorRsp message BadPlayeridErr "Unknown player id"
-        Just number ->
-            Ok number
+        Just (gameid, number) ->
+            case checkOnlyGameid state message gameid of
+                Err err ->
+                    Err err
+                Ok gameState ->
+                    Ok (gameState, number)
 
-checkPlayerid : ServerState -> Message -> String -> ServerPhase -> Result Message Int
+checkPlayerid : ServerState -> Message -> String -> ServerPhase -> Result Message (GameState, Int)
 checkPlayerid state message playerid phase =
     case checkOnlyPlayerid state message playerid of
         Err _ as res ->
             res
-        Ok _ as res ->
-            if phase == state.phase then
+        Ok (gameState, _) as res ->
+            if phase == gameState.phase then
                 res
             else
                 Err <| errorRsp message IllegalRequestErr
@@ -133,13 +148,23 @@ processServerMessage state message =
         -- Basic game play
         NewReq { players, name } ->
             if players == 2 || players == 4 then
-                let st2 = { emptyServerState
-                              | players = players
-                              , resolver = 2 --auto-join
-                              , playerNumbers = [("1", 1)]
-                          }
-                    msg = NewRsp { gameid = st2.gameid
-                                 , playerid = "1"
+                let gameState = { emptyGameState
+                                    | players = players
+                                    , resolver = 2 --auto-join
+                                }
+                    gameid = gameState.gameid
+                    playerid = "1"
+                    st2 = { state
+                              | gameDict =
+                                  Dict.insert gameid gameState state.gameDict
+                              , playeridDict =
+                                  Dict.insert gameid [playerid] state.playeridDict
+                              , gameidDict =
+                                  Dict.insert playerid
+                                      (gameid, 1) state.gameidDict
+                          }                        
+                    msg = NewRsp { gameid = gameid
+                                 , playerid = playerid
                                  , players = players
                                  , name = name
                                  }
@@ -152,37 +177,40 @@ processServerMessage state message =
                 )
         JoinReq { gameid, name } ->
             case checkGameid state message gameid JoinPhase of
-                Just err ->
+                Err err ->
                     (state, err)
-                Nothing ->
-                    joinReq state message gameid name
+                Ok gameState ->
+                    joinReq state gameState message gameid name
         PlaceReq { playerid, placement } ->
             case checkPlayerid state message playerid PlacementPhase of
                 Err err ->
                     (state, err)
-                Ok number ->
-                    placeReq state message placement number
+                Ok (gameState, number) ->
+                    updateGameState state
+                        <| placeReq gameState message placement number
         ResolveReq { playerid, resolution } ->
             case checkPlayerid state message playerid ResolutionPhase of
                 Err err ->
                     (state, err)
-                Ok _ ->
-                    resolveReq state message resolution
+                Ok (gameState, _) ->
+                    updateGameState state
+                        <| resolveReq gameState message resolution
         -- Errors
         UndoReq { playerid, message } ->
             case checkOnlyPlayerid state message playerid of
                 Err err ->
                     (state, err)
-                Ok _ ->
-                    undoReq state message
+                Ok (gameState, _) ->
+                    updateGameState state
+                        <| undoReq gameState message
         -- Chat
         ChatReq { playerid, text } ->
             case checkOnlyPlayerid state message playerid of
                 Err err ->
                     (state, err)
-                Ok number  ->
+                Ok (gameState, number)  ->
                     ( state
-                    , ChatRsp { gameid = state.gameid
+                    , ChatRsp { gameid = gameState.gameid
                               , text = text
                               , number = number
                               }
@@ -192,46 +220,61 @@ processServerMessage state message =
             , errorRsp message IllegalRequestErr "Illegal Request"
             )
 
-joinReq : ServerState -> Message -> String -> String -> (ServerState, Message)
-joinReq state message gameid name =
-    if state.phase /= JoinPhase then
-        ( state
-        , errorRsp message IllegalRequestErr "Join phase complete"
-        )
-    else
-        let player = state.resolver
-            playerid = toString player
-            joinDone = (player == state.players)
-            msg = JoinRsp { gameid = gameid
-                          , playerid = Just playerid
-                          , name = name
-                          , number = player
-                          }
-            st2 = { state
-                      | resolver = if joinDone then
-                                       1
-                                   else
-                                       player + 1
-                      , playerNumbers = (playerid, player) :: state.playerNumbers
-                      , phase = if joinDone then
-                                    PlacementPhase
-                                else
-                                    JoinPhase
-                      , history = if joinDone then
-                                      [ { number = 1
-                                        , resolver = 1
-                                        , placements = []
-                                        , resolutions = []
-                                        }
-                                      ]
-                                  else
-                                      state.history
-                  }
-        in
-            -- The non-proxy server will generate a new playerid
-            ( st2, msg )
+updateGameState : ServerState -> (GameState, Message) -> (ServerState, Message)
+updateGameState state (gameState, message) =
+    ( { state
+          | gameDict = Dict.insert gameState.gameid gameState state.gameDict
+      }
+    , message
+    )
 
-placeReq : ServerState -> Message -> Move -> Int -> (ServerState, Message)
+joinReq : ServerState -> GameState -> Message -> String -> String -> (ServerState, Message)
+joinReq state gameState message gameid name =
+    let player = gameState.resolver
+        playerid = toString player --temporary in real server
+        joinDone = (player == gameState.players)
+        msg = JoinRsp { gameid = gameid
+                      , playerid = Just playerid
+                      , name = name
+                      , number = player
+                      }
+        gs2 = { gameState
+                  | resolver = if joinDone then
+                                   1
+                               else
+                                   player + 1
+                  , phase = if joinDone then
+                                PlacementPhase
+                            else
+                                JoinPhase
+                  , history = if joinDone then
+                                  [ { number = 1
+                                    , resolver = 1
+                                    , placements = []
+                                    , resolutions = []
+                                    }
+                                  ]
+                              else
+                                  gameState.history
+              }
+        st2 = { state
+                  | gameDict = Dict.insert gameid gs2 state.gameDict
+                  , gameidDict =
+                      Dict.insert playerid (gameid, player) state.gameidDict
+                  , playeridDict =
+                      Dict.insert gameid
+                          ( playerid ::
+                                ( Maybe.withDefault []
+                                      <| Dict.get gameid state.playeridDict
+                                )
+                          )
+                          state.playeridDict
+              }
+    in
+        -- The non-proxy server will generate a new playerid
+        ( st2, msg )
+
+placeReq : GameState -> Message -> Move -> Int -> (GameState, Message)
 placeReq state message placement number =
     let placements = Dict.insert number placement state.placements
         placeRsp = PlaceRsp { gameid = state.gameid, number = number }
@@ -317,7 +360,7 @@ isLegalResolution move piles =
         _ ->
             False
 
-resolveReq : ServerState -> Message -> Move -> (ServerState, Message)
+resolveReq : GameState -> Message -> Move -> (GameState, Message)
 resolveReq state message resolution =
     case resolution of
         Resolution _ _ _ ->
@@ -378,7 +421,7 @@ resolveReq state message resolution =
             , errorRsp message IllegalRequestErr "Non-placement move"
             )
 
-undoReq : ServerState -> Message -> (ServerState, Message)
+undoReq : GameState -> Message -> (GameState, Message)
 undoReq state undoMessage =
     case state.history of
         turn :: tail ->
