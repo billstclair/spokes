@@ -228,6 +228,7 @@ joinReq state message gameid name =
                                       state.history
                   }
         in
+            -- The non-proxy server will generate a new playerid
             ( st2, msg )
 
 placeReq : ServerState -> Message -> Move -> Int -> (ServerState, Message)

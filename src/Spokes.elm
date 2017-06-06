@@ -23,7 +23,7 @@ import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , computeDisplayList, findResolution
                                       , placementText, colorLetter
                                       )
-import Spokes.Server.Interface exposing ( makeProxyServer, send )
+import Spokes.Server.Interface as Interface exposing ( makeProxyServer )
 
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
@@ -66,6 +66,7 @@ type alias Model =
     , selectedPile : Maybe StonePile
     , server : ServerInterface Msg
     , gameid : String
+    , playerid : String
     }
 
 initialInputs : Array String
@@ -98,7 +99,12 @@ initialModel =
     , selectedPile = Nothing
     , server = makeProxyServer ServerResponse
     , gameid = ""
+    , playerid = ""
     }
+
+send : ServerInterface msg -> Message -> Cmd msg
+send interface message =
+    Interface.send interface (log "send" message)
 
 init : ( Model, Cmd Msg )
 init =
@@ -125,7 +131,10 @@ update msg model =
                   | players = model.newPlayers
                   , newPlayers = model.newPlayers
               }
-            , Cmd.none
+            , send initialModel.server
+                <| NewReq { players = model.newPlayers
+                          , name = "Bill"
+                          }
             )                    
         SetInput player value ->
             ( { model | inputs = Array.set (player-1) value model.inputs }
@@ -146,9 +155,8 @@ update msg model =
                 Just (move :: _) ->
                     ( model
                     , send model.server
-                        <| PlaceReq { gameid = model.gameid
+                        <| PlaceReq { playerid = model.playerid
                                     , placement = move
-                                    , number = 1
                                     }
                     )
                 _ ->
@@ -199,9 +207,10 @@ serverResponse mod server message =
     let model = { mod | server = server }
     in
         case log "message" message of
-            NewRsp { gameid, name } ->
+            NewRsp { gameid, playerid, name } ->
                 ( { model
                       | gameid = gameid
+                      , playerid = playerid
                       , playerNames = [(1, name)]
                   }
                 , send server
@@ -241,9 +250,9 @@ serverResponse mod server message =
                                 Just placement ->
                                     ( model
                                     , send model.server
-                                        <| PlaceReq { gameid = gameid
+                                        <| PlaceReq { playerid =
+                                                          toString (number +1)
                                                     , placement = placement
-                                                    , number = number + 1
                                                     }
                                     )
                 else
@@ -397,7 +406,7 @@ undoMove model =
                             _ ->
                                 ( model
                                 , send model.server
-                                    <| UndoReq { gameid = model.gameid
+                                    <| UndoReq { playerid = model.playerid
                                                , message =
                                                    PlacedRsp
                                                    { gameid = model.gameid
@@ -408,7 +417,7 @@ undoMove model =
                     resolution :: _ ->
                         ( model
                         , send model.server
-                            <| UndoReq { gameid = model.gameid
+                            <| UndoReq { playerid = model.playerid
                                        , message =
                                            ResolveRsp { gameid = model.gameid
                                                       , resolution = resolution
@@ -455,7 +464,7 @@ maybeMakeMove nodeName pile model =
         Just move ->
             ( model
             , send model.server
-                <| ResolveReq { gameid = model.gameid
+                <| ResolveReq { playerid = model.playerid
                               , resolution = move
                               }
             )
