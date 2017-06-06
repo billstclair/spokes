@@ -34,7 +34,7 @@ import Debug exposing ( log )
 
 emptyServerState : ServerState
 emptyServerState =
-    { gameidDict = Dict.empty
+    { playerInfoDict = Dict.empty
     , playeridDict = Dict.empty
     , gameDict = Dict.empty
     }
@@ -120,10 +120,10 @@ checkGameid state message gameid phase =
 
 checkOnlyPlayerid : ServerState -> Message -> String -> Result Message (GameState, Int)
 checkOnlyPlayerid state message playerid =
-    case Dict.get playerid state.gameidDict of
+    case Dict.get playerid state.playerInfoDict of
         Nothing ->
             Err <| errorRsp message BadPlayeridErr "Unknown player id"
-        Just (gameid, number) ->
+        Just { gameid, number } ->
             case checkOnlyGameid state message gameid of
                 Err err ->
                     Err err
@@ -154,14 +154,18 @@ processServerMessage state message =
                                 }
                     gameid = gameState.gameid
                     playerid = "1"
+                    playerInfo = { gameid = gameid
+                                 , number = 1
+                                 , name = name
+                                 }
                     st2 = { state
                               | gameDict =
                                   Dict.insert gameid gameState state.gameDict
                               , playeridDict =
                                   Dict.insert gameid [playerid] state.playeridDict
-                              , gameidDict =
-                                  Dict.insert playerid
-                                      (gameid, 1) state.gameidDict
+                              , playerInfoDict =
+                                  Dict.insert playerid playerInfo
+                                      state.playerInfoDict
                           }                        
                     msg = NewRsp { gameid = gameid
                                  , playerid = playerid
@@ -257,10 +261,14 @@ joinReq state gameState message gameid name =
                               else
                                   gameState.history
               }
+        playerInfo = { gameid = gameid
+                     , number = player
+                     , name = name
+                     }
         st2 = { state
                   | gameDict = Dict.insert gameid gs2 state.gameDict
-                  , gameidDict =
-                      Dict.insert playerid (gameid, player) state.gameidDict
+                  , playerInfoDict =
+                      Dict.insert playerid playerInfo state.playerInfoDict
                   , playeridDict =
                       Dict.insert gameid
                           ( playerid ::

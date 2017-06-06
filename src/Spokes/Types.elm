@@ -216,8 +216,14 @@ type ServerPhase
     | PlacementPhase
     | ResolutionPhase
 
+type alias PlayerInfo =
+    { gameid : String
+    , number : Int
+    , name : String
+    }
+
 type alias ServerState =
-    { gameidDict : Dict String (String, Int) --playerid -> (gameid, number)
+    { playerInfoDict : Dict String PlayerInfo --playerid -> PlayerInfo
     , playeridDict : Dict String (List String) -- gameid -> List playerid
     , gameDict : Dict String GameState --gameid -> GameState
     }

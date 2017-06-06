@@ -164,15 +164,21 @@ processResponse model socket state response =
                                  let gs2 = { gs | gameid = gid }
                                      gameDict =
                                          Dict.remove gameid state.gameDict
-                                     gameidDict =
-                                         Dict.remove playerid state.gameidDict
+                                     playerInfoDict =
+                                         Dict.remove playerid state.playerInfoDict
+                                     playerInfo =
+                                         { gameid = gid
+                                         , number = 1
+                                         , name = name
+                                         }
                                      playeridDict =
                                          Dict.remove gameid state.playeridDict
                                  in
                                      { state
                                          | gameDict = Dict.insert gid gs2 gameDict
-                                         , gameidDict =
-                                             Dict.insert pid (gid, 1) gameidDict
+                                         , playerInfoDict =
+                                             Dict.insert pid playerInfo
+                                                 playerInfoDict
                                          , playeridDict =
                                              Dict.insert gid [pid] playeridDict
                                      }
@@ -194,33 +200,39 @@ processResponse model socket state response =
                 )
         JoinRsp { gameid, name, playerid, number } ->
              let (pid, model2) = newPlayerid model
-                 gameidDict = case playerid of
-                                  Just id -> Dict.remove id state.gameidDict
-                                  Nothing -> state.gameidDict
+                 playerInfo = { gameid = gameid
+                              , number = number
+                              , name = name
+                              }
+                 playerInfoDict = case playerid of
+                                  Just id -> Dict.remove id state.playerInfoDict
+                                  Nothing -> state.playerInfoDict
                  playerids = case Dict.get gameid state.playeridDict of
-                                 Nothing -> [pid] --can't happen
-                                 Just ids ->
-                                     pid ::
-                                         (case playerid of
-                                              Nothing -> ids
-                                              Just id ->
-                                                  (List.filter (\i -> id /= i) ids)
-                                         )
+                                 Nothing -> [] --can't happen
+                                 Just ids -> ids
+                 newPlayerids = case playerid of
+                                    Nothing -> playerids
+                                    Just id -> id :: playerids
                  st2 = { state
-                           | gameidDict =
-                               Dict.insert pid (gameid, number) gameidDict
+                           | playerInfoDict =
+                               Dict.insert pid playerInfo playerInfoDict
                            , playeridDict =
-                               Dict.insert gameid playerids state.playeridDict
+                               case playerid of
+                                   Nothing -> state.playeridDict
+                                   Just id -> 
+                                       Dict.insert gameid newPlayerids
+                                           state.playeridDict
                        }
                  sockets = case Dict.get gameid model.socketsDict of
-                               Nothing -> [socket] --can't happen
-                               Just socks -> socket :: socks
+                               Nothing -> [] --can't happen
+                               Just socks -> socks
                  model3 = { model2
                               | state = st2
                               , gameidDict =
                                   Dict.insert socket gameid model2.gameidDict
                               , socketsDict =
-                                  Dict.insert gameid sockets model2.socketsDict
+                                  Dict.insert gameid (socket :: sockets)
+                                      model2.socketsDict
                           }
                  rsp = JoinRsp { gameid = gameid
                                , name = name
@@ -232,12 +244,26 @@ processResponse model socket state response =
                                 , playerid = Nothing
                                 , number = number
                                 }
+                 oldJoins = List.concatMap
+                            (\pid -> case Dict.get pid st2.playerInfoDict of
+                                         Nothing ->
+                                             []
+                                         Just { number, name } ->
+                                             [ JoinRsp { gameid = gameid
+                                                       , name = name
+                                                       , playerid = Nothing
+                                                       , number = number
+                                                       }
+                                             ]
+                            )
+                            playerids
              in
                  ( model3
                  , Cmd.batch
                      [ sendToOne rsp socket
-                     , sendToMany rsp2
-                          <| List.filter (\s -> s /= socket) sockets
+                     , List.map (\r -> sendToOne r socket) oldJoins
+                         |> Cmd.batch
+                     , sendToMany rsp2 sockets
                      ]
                  )
         ErrorRsp _ ->
