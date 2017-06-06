@@ -21,7 +21,7 @@ type ServerError
     | IllegalPlayerCountErr
     | WrongGameidErr
     | UnparsableJsonErr
-    | WrongPlayerNumberErr
+    | BadPlayeridErr
 
 errnums : List (ServerError, Int)
 errnums =
@@ -30,7 +30,7 @@ errnums =
     , (IllegalPlayerCountErr, 3)
     , (WrongGameidErr, 4)
     , (UnparsableJsonErr, 5)
-    , (WrongPlayerNumberErr, 6)
+    , (BadPlayeridErr, 6)
     ]
 
 errnum : ServerError -> Int

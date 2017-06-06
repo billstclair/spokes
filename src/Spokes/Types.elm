@@ -226,6 +226,7 @@ type alias ServerState =
     , resolver : Int
     , placements : Dict Int Move
     , gameid : String
+    , playerNumbers : List (String, Int) --(playerid, number)
     , history : History
     }
 
