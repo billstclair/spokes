@@ -773,7 +773,7 @@ renderGamePage model =
                , input [ type_ "text"
                        , onInput <| SetGameid
                        , disabled model.newIsLocal
-                       , size 16
+                       , size 18
                        , value model.newGameid
                        ]
                    []
