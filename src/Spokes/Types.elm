@@ -45,6 +45,8 @@ type Msg
     | SetPage Page
     | Undo
     | ServerResponse (ServerInterface Msg) Message
+    | WebSocketMessage String
+    | Noop
 
 type alias Board =
     Dict String Node

@@ -10,7 +10,8 @@
 ----------------------------------------------------------------------
 
 module Spokes.Server.Interface exposing ( emptyServerState
-                                        , makeProxyServer, send
+                                        , makeProxyServer, makeServer, send
+                                        , getServer
                                         , processServerMessage
                                         )
 
@@ -31,6 +32,7 @@ import Dict exposing ( Dict )
 import Task
 import List.Extra as LE
 import Debug exposing ( log )
+import WebSocket
 
 emptyServerState : ServerState
 emptyServerState =
@@ -65,6 +67,18 @@ makeProxyServer wrapper =
                     , sender = proxySender
                     }
 
+makeServer : String -> msg -> ServerInterface msg
+makeServer server msg =
+    ServerInterface { server = server
+                    , wrapper = (\_ _ -> msg)
+                    , state = Nothing
+                    , sender = sender
+                    }
+
+getServer : ServerInterface msg -> String
+getServer (ServerInterface interface) =
+    interface.server
+
 send : ServerInterface msg -> Message -> Cmd msg
 send ((ServerInterface interface) as si) message =
     interface.sender si message
@@ -82,6 +96,10 @@ proxySender (ServerInterface interface) message =
         (s2, msgs) = processServerMessage state message
     in
         proxyCmd (ServerInterface { interface | state = Just s2 }) msgs
+
+sender : ServerInterface msg -> Message -> Cmd msg
+sender (ServerInterface interface) message =
+    WebSocket.send interface.server (encodeMessage message)
 
 errorRsp : Message -> ServerError -> String -> Message
 errorRsp message error text =

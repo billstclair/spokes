@@ -23,7 +23,8 @@ import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , computeDisplayList, findResolution
                                       , placementText, colorLetter
                                       )
-import Spokes.Server.Interface as Interface exposing ( makeProxyServer )
+import Spokes.Server.EncodeDecode exposing ( decodeMessage )
+import Spokes.Server.Interface as Interface exposing ( makeProxyServer, makeServer )
 
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
@@ -38,6 +39,7 @@ import Html.Events exposing ( onClick, onInput, onFocus )
 import Array exposing ( Array )
 import Char
 import List.Extra as LE
+import WebSocket
 import Debug exposing ( log )
 
 main =
@@ -45,7 +47,7 @@ main =
         { init = init
         , view = view
         , update = update
-        , subscriptions = (\x -> Sub.none)
+        , subscriptions = subscriptions
         }
 
 type alias Model =
@@ -66,6 +68,7 @@ type alias Model =
     , selectedPile : Maybe StonePile
     , server : ServerInterface Msg
     , gameid : String
+    , playerNumber : Int
     , playerid : String
     , serverUrl : String
     , isLocal : Bool
@@ -104,10 +107,11 @@ initialModel =
     , selectedPile = Nothing
     , server = makeProxyServer ServerResponse
     , gameid = ""
+    , playerNumber = 1
     , playerid = ""
-    , serverUrl = "http://localhost:8080"
-    , isLocal = True
-    , newIsLocal = True
+    , serverUrl = "ws://localhost:8080"
+    , isLocal = False
+    , newIsLocal = False
     , name = "Player 1"
     , newGameid = ""
     }
@@ -119,15 +123,29 @@ send interface message =
 init : ( Model, Cmd Msg )
 init =
     ( initialModel
-    , send initialModel.server
-        <| NewReq { players = initialModel.players
-                  , name = "Bill"
-                  }
+    , if initialModel.isLocal then
+          send initialModel.server
+              <| NewReq { players = initialModel.players
+                        , name = initialModel.name
+                        }
+      else
+          Cmd.none
     )
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    if model.isLocal then
+        Sub.none
+    else
+        WebSocket.listen (Interface.getServer model.server) WebSocketMessage
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        Noop ->
+            ( model
+            , Cmd.none
+            )
         SetPage page ->
             ( { model | page = page }
             , Cmd.none
@@ -153,19 +171,53 @@ update msg model =
             , Cmd.none
             )
         NewGame ->
-            ( { initialModel
-                  | players = model.newPlayers
-                  , newPlayers = model.newPlayers
+            let isLocal = model.newIsLocal
+                server = if isLocal then
+                             initialModel.server
+                         else
+                             makeServer model.serverUrl Noop
+                players = model.newPlayers
+            in                             
+                ( { initialModel
+                      | players = players
+                      , newPlayers = players
+                      , name = model.name
+                      , isLocal = isLocal
+                      , newIsLocal = isLocal
+                      , server = server
+                      , gameid = ""
+                      , newGameid = ""
               }
-            , send initialModel.server
-                <| NewReq { players = model.newPlayers
-                          , name = "Bill"
+            , send server
+                <| NewReq { players = players
+                          , name = model.name
                           }
             )
         JoinGame ->
-            ( model
-            , Cmd.none
-            )
+            let isLocal = model.newIsLocal
+                server = if isLocal then
+                             initialModel.server
+                         else
+                             makeServer model.serverUrl Noop
+                gameid = model.newGameid
+            in
+                if gameid == model.gameid then
+                    ( model
+                    , Cmd.none
+                    )
+                else
+                    ( { initialModel
+                          | name = model.name
+                          , isLocal = isLocal
+                          , newIsLocal = isLocal
+                          , server = server
+                          , gameid = gameid
+                      }
+                    , send server
+                        <| JoinReq { gameid = gameid
+                                   , name = model.name
+                                   }
+                    )
         SetInput player value ->
             ( { model | inputs = Array.set (player-1) value model.inputs }
             , Cmd.none
@@ -185,7 +237,10 @@ update msg model =
                 Just (move :: _) ->
                     ( model
                     , send model.server
-                        <| PlaceReq { playerid = model.playerid
+                        <| PlaceReq { playerid = if model.isLocal then
+                                                     "1"
+                                                 else
+                                                     model.playerid
                                     , placement = move
                                     }
                     )
@@ -195,7 +250,8 @@ update msg model =
             case model.selectedPile of
                 Nothing ->
                     if (model.phase /= PlacementPhase) ||
-                        (String.all Char.isDigit nodeName) then
+                        (String.all Char.isDigit nodeName)
+                    then
                         ( model, Cmd.none )
                     else
                         let c = colorLetter model.inputColor
@@ -206,29 +262,43 @@ update msg model =
                                       = Array.set
                                         (model.lastFocus-1) input model.inputs
                                   , lastFocus
-                                      = (model.lastFocus % model.players) + 1
+                                      = if model.isLocal then
+                                            (model.lastFocus % model.players) + 1
+                                        else
+                                            model.lastFocus
                               }
                             , Cmd.none
                             )
                 Just pile ->
                     maybeMakeMove nodeName pile model
         PileClick pile ->
-            case model.selectedPile of
-                Nothing ->
-                    case pile.resolutions of
-                        Nothing ->
-                            ( model, Cmd.none )
-                        Just _ ->
-                            ( { model | selectedPile = Just pile }
+            if (not model.isLocal) && (model.resolver /= model.playerNumber) then
+                ( model, Cmd.none )
+            else
+                case model.selectedPile of
+                    Nothing ->
+                        case pile.resolutions of
+                            Nothing ->
+                                ( model, Cmd.none )
+                            Just _ ->
+                                ( { model | selectedPile = Just pile }
+                                , Cmd.none
+                                )
+                    Just p ->
+                        if p == pile then
+                            ( { model | selectedPile = Nothing }
                             , Cmd.none
                             )
-                Just p ->
-                    if p == pile then
-                        ( { model | selectedPile = Nothing }
-                        , Cmd.none
-                        )
-                    else
-                        maybeMakeMove pile.nodeName p model
+                        else
+                            maybeMakeMove pile.nodeName p model
+        WebSocketMessage string ->  
+            case decodeMessage string of
+                Err err ->
+                    let _ = log "  error" (err, string)
+                    in
+                        ( model, Cmd.none )
+                Ok message ->
+                    serverResponse model model.server message
         ServerResponse server message ->
             serverResponse model server message
 
@@ -240,53 +310,84 @@ serverResponse mod server message =
             NewRsp { gameid, playerid, name } ->
                 ( { model
                       | gameid = gameid
+                      , newGameid = if model.isLocal then
+                                        model.newGameid
+                                    else
+                                        gameid
                       , playerid = playerid
                       , playerNames = [(1, name)]
                   }
-                , send server
-                    <| JoinReq { gameid = gameid, name = "bill" }
+                , if model.isLocal then
+                      send server
+                          <| JoinReq { gameid = gameid, name = "bill" }
+                  else
+                      Cmd.none
                 )
-            JoinRsp { gameid, number, name } ->
+            JoinRsp { gameid, name, playerid, number } ->
                 let done = number >= model.players
-                    cmd = if not done then
+                    cmd = if (not done) && model.isLocal then
                               send server
                                   <| JoinReq { gameid = gameid, name = "bill" }
                           else
                               Cmd.none
                     playerNames = (number, name) :: model.playerNames
+                    (pid, playerNumber, lastFocus) =
+                        case playerid of
+                            Nothing ->
+                                ( model.playerid
+                                , model.playerNumber
+                                , model.lastFocus)
+                            Just pid ->
+                                ( pid
+                                , number
+                                , if model.isLocal then
+                                      model.lastFocus
+                                  else
+                                      number
+                                )
+                    model2 = { model
+                                 | playerNames = playerNames
+                                 , playerid = pid
+                                 , playerNumber = playerNumber
+                                 , lastFocus = lastFocus
+                             }
                 in
                 ( if done then
-                      { model
-                          | playerNames = playerNames
-                          , phase = PlacementPhase
+                      { model2
+                          | phase = PlacementPhase
                           , turn = 1
                           , resolver = 1
                       }
                   else
-                      { model
-                          | playerNames = playerNames
-                      }
+                      model2
                 , cmd
                 )
             PlaceRsp { gameid, number } ->
-                if number < model.players then
-                    case getPlacements model of
-                        Nothing ->
-                            (model, Cmd.none)
-                        Just placements ->
-                            case LE.getAt number placements of
-                                Nothing ->
-                                    (model, Cmd.none)
-                                Just placement ->
-                                    ( model
-                                    , send model.server
-                                        <| PlaceReq { playerid =
-                                                          toString (number +1)
-                                                    , placement = placement
-                                                    }
-                                    )
+                if not model.isLocal then
+                    ( { model
+                          | inputs = Array.set (number-1) "xxxx" model.inputs
+                      }
+                    , Cmd.none
+                    )
                 else
-                    (model, Cmd.none)
+                    if number < model.players then
+                        case getPlacements model of
+                            Nothing ->
+                                (model, Cmd.none)
+                            Just placements ->
+                                case LE.getAt number placements of
+                                    Nothing ->
+                                        (model, Cmd.none)
+                                    Just placement ->
+                                        ( model
+                                        , send model.server
+                                            <| PlaceReq { playerid =
+                                                              toString (number +1)
+                                                        , placement = placement
+                                                        }
+                                        )
+                    else
+                        (model, Cmd.none)
             PlacedRsp { gameid, placements } ->
                 let board = List.foldr makeMove model.board placements
                     his = case model.history of
@@ -308,7 +409,7 @@ serverResponse mod server message =
                           , board = board
                           , resolver = resolver
                           , phase = phase
-                          , lastFocus = 1
+                          , lastFocus = if model.isLocal then 1 else model.lastFocus
                           , displayList = displayList
                           , inputs = initialInputs
                       }
@@ -527,10 +628,18 @@ getPlacements model =
                                     Err _ ->
                                         Nothing
                                     Ok move ->
-                                        loop (idx-1) <| move :: res
+                                        if model.isLocal then
+                                            loop (idx-1) <| move :: res
+                                        else
+                                            Just [move]
                )
     in
-        loop (model.players - 1) []
+        loop (if model.isLocal then
+                   model.players - 1
+              else
+                  model.playerNumber - 1
+             )
+            []
 
 canPlace : Model -> Bool
 canPlace model =
@@ -550,7 +659,9 @@ joinLine model =
 placementLine : Model -> Html Msg
 placementLine model =
     span []
-        [ text <| "Player " ++ (toString model.resolver) ++ " will resolve. "
+        [ text
+              <| (getPlayerName model.resolver "Player " model) ++
+                  " will resolve. "
         , button [ onClick Place
                  , disabled (not <| canPlace model)
                  ]
@@ -560,7 +671,15 @@ placementLine model =
 resolutionLine : Model -> Html Msg
 resolutionLine model =
     span []
-        [ text <| "Player " ++ (toString model.resolver) ++ " please resolve. "
+        [ text <|
+              if model.isLocal then
+                  "Player " ++ (toString model.resolver) ++ " please resolve. "
+              else
+                  if model.resolver == model.playerNumber then
+                      "Please resolve now."
+                  else
+                      (getPlayerName model.resolver "Player " model) ++
+                          " is resolving."
         , button [ disabled True ] [ text "Place" ]
         ]
 
@@ -728,7 +847,19 @@ historyDiv : Model -> Html Msg
 historyDiv model =
     div []
         [ p []
-              [ button [ onClick Undo ]
+              [ button [ onClick Undo
+                       , disabled
+                             <| (not model.isLocal) &&
+                                 ( model.phase /= ResolutionPhase ||
+                                       model.resolver /= model.playerNumber ||
+                                       (case model.history of
+                                            { resolutions } :: _ ->
+                                                resolutions == []
+                                            _ ->
+                                                True
+                                       )
+                                 )
+                       ]
                     [ text "Undo" ]
               ]
         , table [ class "bordered" ]
@@ -804,13 +935,34 @@ examplePlaceString player =
     in
         bw ++ circle ++ (toString spoke)
 
+getPlayerName : Int -> String -> Model -> String
+getPlayerName player prefix model =
+    case if model.isLocal then
+             Nothing
+         else
+             if player == model.playerNumber then
+                 Just "YOU"
+             else
+                 case LE.find (\(n, _) -> n == player) model.playerNames of
+                     Nothing ->
+                         Nothing
+                     Just (_, name) ->
+                         Just name
+    of
+        Nothing ->
+            prefix ++ (toString player)
+        Just name ->
+            name
+
 inputItem : Int -> Model -> Html Msg
 inputItem player model =
     span []
-        [ b [ text <| (toString player) ++ ": " ]
+        [ b [ text <| (getPlayerName player "" model) ++ ": " ]
         , input [ type_ "text"
                 , onInput <| SetInput player
-                , disabled <| model.phase /= PlacementPhase
+                , disabled
+                      <| (model.phase /= PlacementPhase) ||
+                          ((not model.isLocal) && (player /= model.playerNumber))
                 , placeholder
                       <| if player == model.lastFocus &&
                           model.phase == PlacementPhase
