@@ -22,6 +22,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              )
 
 import Dict exposing ( Dict )
+import Http
 
 type Page
     = GamePage
@@ -46,6 +47,7 @@ type Msg
     | Undo
     | ServerResponse (ServerInterface Msg) Message
     | WebSocketMessage String
+    | ReceiveServerUrl (Result Http.Error String)
     | Noop
 
 type alias Board =

@@ -40,6 +40,7 @@ import Array exposing ( Array )
 import Char
 import List.Extra as LE
 import WebSocket
+import Http
 import Debug exposing ( log )
 
 main =
@@ -122,14 +123,20 @@ send interface message =
 
 init : ( Model, Cmd Msg )
 init =
-    ( initialModel
-    , if initialModel.isLocal then
-          send initialModel.server
-              <| NewReq { players = initialModel.players
-                        , name = initialModel.name
-                        }
+    let getString = Http.send ReceiveServerUrl
+                    <| Http.getString "server.txt"
+    in
+        ( initialModel
+        , if initialModel.isLocal then
+              Cmd.batch
+                  [ getString
+                  , send initialModel.server
+                      <| NewReq { players = initialModel.players
+                                , name = initialModel.name
+                                }
+                  ]
       else
-          Cmd.none
+          getString
     )
 
 subscriptions : Model -> Sub Msg
@@ -185,6 +192,7 @@ update msg model =
                       , isLocal = isLocal
                       , newIsLocal = isLocal
                       , server = server
+                      , serverUrl = model.serverUrl
                       , gameid = ""
                       , newGameid = ""
               }
@@ -301,6 +309,14 @@ update msg model =
                     serverResponse model model.server message
         ServerResponse server message ->
             serverResponse model server message
+        ReceiveServerUrl response ->
+            case log "server.txt response" response of
+                Err err ->
+                    ( model, Cmd.none )
+                Ok url ->
+                    ( { model | serverUrl = String.trim url }
+                    , Cmd.none
+                    )
 
 serverResponse : Model -> ServerInterface Msg -> Message -> (Model, Cmd Msg)
 serverResponse mod server message =
