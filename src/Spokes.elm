@@ -787,7 +787,7 @@ renderGamePage model =
                , input [ type_ "text"
                        , onInput <| SetServerUrl
                        , disabled model.newIsLocal
-                       , size 30
+                       , size 50
                        , value model.serverUrl
                        ]
                      []
