@@ -30,7 +30,12 @@ type Page
 
 type Msg
     = SetPlayers Int
+    | SetIsLocal Bool
+    | SetName String
+    | SetGameid String
+    | SetServerUrl String
     | NewGame
+    | JoinGame
     | SetInput Int String
     | Place
     | NodeClick String

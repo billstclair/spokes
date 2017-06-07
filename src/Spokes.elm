@@ -67,6 +67,11 @@ type alias Model =
     , server : ServerInterface Msg
     , gameid : String
     , playerid : String
+    , serverUrl : String
+    , isLocal : Bool
+    , newIsLocal : Bool
+    , name : String
+    , newGameid : String
     }
 
 initialInputs : Array String
@@ -100,6 +105,11 @@ initialModel =
     , server = makeProxyServer ServerResponse
     , gameid = ""
     , playerid = ""
+    , serverUrl = "http://localhost:8080"
+    , isLocal = True
+    , newIsLocal = True
+    , name = "Player 1"
+    , newGameid = ""
     }
 
 send : ServerInterface msg -> Message -> Cmd msg
@@ -126,6 +136,22 @@ update msg model =
             ( { model | newPlayers = players }
             , Cmd.none
             )
+        SetIsLocal local ->
+            ( { model | newIsLocal = local }
+            , Cmd.none
+            )
+        SetName name ->
+            ( { model | name = name }
+            , Cmd.none
+            )
+        SetGameid gameid ->
+            ( { model | newGameid = gameid }
+            , Cmd.none
+            )
+        SetServerUrl url ->
+            ( { model | serverUrl = url }
+            , Cmd.none
+            )
         NewGame ->
             ( { initialModel
                   | players = model.newPlayers
@@ -135,7 +161,11 @@ update msg model =
                 <| NewReq { players = model.newPlayers
                           , name = "Bill"
                           }
-            )                    
+            )
+        JoinGame ->
+            ( model
+            , Cmd.none
+            )
         SetInput player value ->
             ( { model | inputs = Array.set (player-1) value model.inputs }
             , Cmd.none
@@ -592,6 +622,40 @@ renderGamePage model =
                , radio "players" "2 " (model.newPlayers == 2) <| SetPlayers 2
                , radio "players" "4 " (model.newPlayers == 4) <| SetPlayers 4
                , button [ onClick NewGame ] [ text "New Game" ]
+               , br
+               , radio "local" "local " (model.newIsLocal) <| SetIsLocal True
+               , radio "local" "remote" (not model.newIsLocal) <| SetIsLocal False
+               , b [text " Name: " ]
+               , input [ type_ "text"
+                       , onInput <| SetName
+                       , disabled model.newIsLocal
+                       , size 30
+                       , value model.name
+                       ]
+                     []
+               , br
+               , b [ text "Game ID: " ]
+               , input [ type_ "text"
+                       , onInput <| SetGameid
+                       , disabled model.newIsLocal
+                       , size 16
+                       , value model.newGameid
+                       ]
+                   []
+               , text " "
+               , button [ onClick JoinGame
+                        , disabled model.newIsLocal
+                        ]
+                   [ text "Join Game" ]
+               , br
+               , b [text " URL: " ]
+               , input [ type_ "text"
+                       , onInput <| SetServerUrl
+                       , disabled model.newIsLocal
+                       , size 30
+                       , value model.serverUrl
+                       ]
+                     []
                ]
         ]
 
