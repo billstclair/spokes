@@ -23,3 +23,14 @@ To build after a code change:
 To start the server:
 
 * `npm run start:server`
+
+If your web server automatically upgrades to HTTPS, you'll need to proxy to get to the non-encrypted websocket server. Do this by installing Apache `mod_proxy_wstunnel`:
+
+    $ sudo a2enmod proxy_wstunnel
+    $ sudo service apache2 restart
+
+Then add to either your Apache virtual host configuration or to an `.htaccess` file, the following:
+
+    ProxyPass "/spokes-server/"  "ws://localhost:8080/"
+    
+`/spokes-server/` has to match the contents of `site/server.txt`, from which the client loads the server default.

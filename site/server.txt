@@ -1,1 +1,1 @@
-ws://xossbow.com:8080/
+wss://xossbow.com/spokes-server/
