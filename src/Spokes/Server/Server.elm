@@ -126,11 +126,15 @@ disconnection model socket =
 
 sendToOne : Message -> Socket -> Cmd Msg
 sendToOne message socket =
-    WSS.sendToOne outputPort (encodeMessage message) socket
+    WSS.sendToOne outputPort
+        (log "send" (encodeMessage message))
+        (log "  " socket)
 
 sendToMany : Message -> (List Socket) -> Cmd Msg
 sendToMany message sockets =
-    WSS.sendToMany outputPort (encodeMessage message) sockets
+    WSS.sendToMany outputPort
+        (log "send" (encodeMessage message))
+        (log "  " sockets)
         |> Cmd.batch
 
 socketMessage : Model -> Socket -> String -> (Model, Cmd Msg)
