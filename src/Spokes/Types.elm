@@ -37,6 +37,7 @@ type Msg
     | SetServerUrl String
     | NewGame
     | JoinGame
+    | ResignGame
     | SetInput Int String
     | Place
     | NodeClick String
@@ -244,9 +245,12 @@ type Message
     | ChatRsp { gameid : String, text : String, number : Int }
 
 type ServerPhase
-    = JoinPhase
+    = StartPhase
+    | JoinPhase
     | PlacementPhase
     | ResolutionPhase
+    | ResignedPhase
+    | GameOverPhase
 
 type alias PlayerInfo =
     { gameid : String

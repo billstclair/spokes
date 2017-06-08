@@ -101,7 +101,7 @@ initialModel =
     , newPlayers = 2
     , playerNames = []
     , turn = 1
-    , phase = JoinPhase
+    , phase = StartPhase
     , lastFocus = 1
     , inputColor = White
     , inputs = initialInputs
@@ -197,6 +197,7 @@ update msg model =
                       , serverUrl = model.serverUrl
                       , gameid = ""
                       , newGameid = ""
+                      , phase = JoinPhase
               }
             , send server
                 <| NewReq { players = players
@@ -229,6 +230,13 @@ update msg model =
                                    , name = model.name
                                    }
                     )
+        ResignGame ->
+            ( { model
+                  | phase = ResignedPhase
+                  , newGameid = ""
+              }
+            , Cmd.none
+            )
         SetInput player value ->
             ( { model | inputs = Array.set (player-1) value model.inputs }
             , Cmd.none
@@ -671,6 +679,13 @@ canPlace model =
         Just _ ->
             True
 
+startLine : Model -> Html Msg
+startLine model =
+    span []
+        [ text "Click 'New Game' or 'Join Game' below to begin. "
+        , button [ disabled True ] [ text "Start" ]
+        ]
+
 joinLine : Model -> Html Msg
 joinLine model =
     span []
@@ -703,6 +718,20 @@ resolutionLine model =
                       (getPlayerName model.resolver "Player " model) ++
                           " is resolving. "
         , button [ disabled True ] [ text "Resolve" ]
+        ]
+
+resignedLine : Model -> Html Msg
+resignedLine model =
+    span []
+        [ text "You resigned. Click 'New Game' or 'Join Game' for another game. "
+        , button [ disabled True ] [ text "Resigned" ]
+        ]
+
+gameOverLine : Model -> Html Msg
+gameOverLine model =
+    span []
+        [ text "Game over. Click 'New Game' or 'Join Game' for another. "
+        , button [ disabled True ] [ text "Game Over" ]
         ]
 
 playButton : Html Msg
@@ -740,83 +769,98 @@ renderHelpPage : Html Msg
 renderHelpPage =
     renderIframePage "Help" "docs/help.html"
 
+isPlaying : Model -> Bool
+isPlaying model =
+    List.member model.phase [JoinPhase, PlacementPhase, ResolutionPhase]
+
 renderGamePage : Model -> Html Msg
 renderGamePage model =
-    div []
-        [ inputItems model
-        , p []
-            [ case model.phase of
-                  JoinPhase -> joinLine model
-                  PlacementPhase -> placementLine model
-                  ResolutionPhase -> resolutionLine model
-            ]
-        , p []
-            [ b [ text "Placement Click Color: " ]
-            , radio "color" "white " (model.inputColor == White)
-                  <| SetInputColor White
-            , radio "players" "black" (model.inputColor == Black)
-                <| SetInputColor Black
-            ]
-        , p []
-            [ let renderInfo = model.renderInfo
-                  ri = if model.isLocal then
-                           renderInfo
-                       else
-                           { renderInfo
-                               | players = Just model.players
-                               , playerNumber = Just model.playerNumber
-                               , resolver = Just model.resolver
-                               , placement = model.placement
-                           }
-              in
-                  Board.render
+    let nostart = isPlaying model
+    in
+        div []
+            [ inputItems model
+            , p []
+                [ case model.phase of
+                      StartPhase -> startLine model
+                      JoinPhase -> joinLine model
+                      PlacementPhase -> placementLine model
+                      ResolutionPhase -> resolutionLine model
+                      ResignedPhase -> resignedLine model
+                      GameOverPhase -> resignedLine model
+                ]
+            , p []
+                [ b [ text "Placement Click Color: " ]
+                , radio "color" "white " (model.inputColor == White) False
+                    <| SetInputColor White
+                , radio "players" "black" (model.inputColor == Black) False
+                    <| SetInputColor Black
+                ]
+            , p []
+                [ let renderInfo = model.renderInfo
+                      ri = if model.isLocal then
+                               renderInfo
+                           else
+                               { renderInfo
+                                   | players = Just model.players
+                                   , playerNumber = Just model.playerNumber
+                                   , resolver = Just model.resolver
+                                   , placement = model.placement
+                               }
+                  in
+                      Board.render
                       model.selectedPile model.displayList ri
-            ]
-        , p [] [ b [ text "Players: " ]
-               , radio "players" "2 " (model.newPlayers == 2) <| SetPlayers 2
-               , radio "players" "4 " (model.newPlayers == 4) <| SetPlayers 4
-               , button [ onClick NewGame ] [ text "New Game" ]
-               , br
-               , radio "local" "local " (model.newIsLocal) <| SetIsLocal True
-               , radio "local" "remote" (not model.newIsLocal) <| SetIsLocal False
-               , b [text " Name: " ]
-               , input [ type_ "text"
-                       , onInput <| SetName
-                       , disabled model.newIsLocal
-                       , size 30
-                       , value model.name
-                       ]
-                     []
-               , br
-               , b [ text "Game ID: " ]
-               , input [ type_ "text"
-                       , onInput <| SetGameid
-                       , disabled model.newIsLocal
-                       , size 18
-                       , value model.newGameid
-                       ]
-                   []
-               , text " "
-               , button [ onClick JoinGame
-                        , disabled model.newIsLocal
-                        ]
-                   [ text "Join Game" ]
-               , br
-               , b [text " URL: " ]
-               , input [ type_ "text"
+                ]
+            , p [] [ b [ text "Players: " ]
+                   , radio "players" "2 " (model.newPlayers == 2) nostart
+                       <| SetPlayers 2
+                   , radio "players" "4 " (model.newPlayers == 4) nostart
+                       <| SetPlayers 4
+                   , button [ onClick <| if nostart then ResignGame else NewGame
+                            ]
+                       [ text <| if nostart then "Resign Game" else "New Game" ]
+                   , br
+                   , radio "local" "local " (model.newIsLocal) nostart
+                       <| SetIsLocal True
+                   , radio "local" "remote" (not model.newIsLocal) nostart
+                       <| SetIsLocal False
+                   , b [text " Name: " ]
+                   , input [ type_ "text"
+                           , onInput <| SetName
+                           , disabled (model.newIsLocal || nostart)
+                           , size 30
+                           , value model.name
+                           ]
+                         []
+                   , br
+                   , b [ text "Game ID: " ]
+                   , input [ type_ "text"
+                           , onInput <| SetGameid
+                           , disabled (model.newIsLocal || nostart)
+                           , size 18
+                           , value model.newGameid
+                           ]
+                         []
+                   , text " "
+                   , button [ onClick JoinGame
+                            , disabled (model.newIsLocal || nostart)
+                            ]
+                         [ text "Join Game" ]
+                   , br
+                   , b [text " URL: " ]
+                   , input [ type_ "text"
                        , onInput <| SetServerUrl
-                       , disabled model.newIsLocal
+                       , disabled (model.newIsLocal || nostart)
                        , size 50
                        , value model.serverUrl
                        ]
                      []
                ]
-        ]
+            ]
 
 pages : List (Page, String)
 pages =
-    [ ( HelpPage, "Help" )
-    , ( RulesPage, "Rules" )
+    [ ( HelpPage, "help" )
+    , ( RulesPage, "rules" )
     ]
 
 pageLink : Page -> (Page, String) -> Html Msg
@@ -1021,13 +1065,14 @@ inputItems model =
         <| List.map (\player -> inputItem player model)
         <| List.range 1 model.players
 
-radio : String -> String -> Bool -> msg -> Html msg
-radio name_ value isChecked msg =
-    span [ onClick msg]
+radio : String -> String -> Bool -> Bool -> msg -> Html msg
+radio name_ value isChecked isDisabled msg =
+    span [ onClick msg ]
         [ input
             [ type_ "radio"
             , name name_
             , checked isChecked
+            , disabled isDisabled
             ]
             []
         , text value

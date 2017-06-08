@@ -111,9 +111,12 @@ errorRsp message error text =
 phaseToString : ServerPhase -> String
 phaseToString phase =
     case phase of
+        StartPhase -> "start"
         JoinPhase -> "join"
         PlacementPhase -> "placement"
         ResolutionPhase -> "resolution"
+        ResignedPhase -> "resigned"
+        GameOverPhase -> "gameover"
 
 checkOnlyGameid : ServerState -> Message -> String -> Result Message GameState
 checkOnlyGameid state message gameid =
