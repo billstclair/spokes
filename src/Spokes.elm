@@ -65,6 +65,7 @@ type alias Model =
     , lastFocus : Int
     , inputColor : Color
     , inputs : Array String
+    , placement : Maybe Move
     , resolver : Int
     , selectedPile : Maybe StonePile
     , server : ServerInterface Msg
@@ -104,6 +105,7 @@ initialModel =
     , lastFocus = 1
     , inputColor = White
     , inputs = initialInputs
+    , placement = Nothing
     , resolver = 1
     , selectedPile = Nothing
     , server = makeProxyServer ServerResponse
@@ -244,7 +246,7 @@ update msg model =
         Place ->
             case getPlacements model of
                 Just (move :: _) ->
-                    ( model
+                    ( { model | placement = Just move }
                     , send model.server
                         <| PlaceReq { playerid = if model.isLocal then
                                                      "1"
@@ -431,6 +433,7 @@ serverResponse mod server message =
                           , lastFocus = if model.isLocal then 1 else model.lastFocus
                           , displayList = displayList
                           , inputs = initialInputs
+                          , placement = Nothing
                       }
                     , Cmd.none
                     )
@@ -763,6 +766,7 @@ renderGamePage model =
                                | players = Just model.players
                                , playerNumber = Just model.playerNumber
                                , resolver = Just model.resolver
+                               , placement = model.placement
                            }
               in
                   Board.render

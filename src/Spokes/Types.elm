@@ -85,6 +85,7 @@ type alias RenderInfo =
     , locations : Dict String Point
     , textLocations : Dict String Point
     , stoneLocations  : Dict String (Point, Point)
+    , placement : Maybe Move
     , players : Maybe Int
     , playerNumber : Maybe Int
     , resolver : Maybe Int

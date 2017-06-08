@@ -18,7 +18,7 @@ module Spokes.Board exposing ( initialBoard, renderInfo, render
 
 import Spokes.Types as Types exposing ( Msg(..), Board, Node
                                       , Point, Sizes, RenderInfo
-                                      , Color(..), Move (..), MovedStone(..)
+                                      , Color(..), Move(..), MovedStone(..)
                                       , NodeClassification(..)
                                       , History, StonePile, DisplayList
                                       , zeroPoint, emptyStonePile
@@ -211,6 +211,7 @@ renderInfo diameter =
         , locations = Dict.fromList locations
         , textLocations = Dict.fromList textLocations
         , stoneLocations = Dict.fromList stoneLocations
+        , placement = Nothing
         , players = Nothing
         , playerNumber = Nothing
         , resolver = Nothing
@@ -265,6 +266,10 @@ targetColor : String
 targetColor =
     "green"
 
+placementColor : String
+placementColor =
+    "orange"
+
 isNodeInPileResolutions : String -> Maybe StonePile -> Bool
 isNodeInPileResolutions nodeName selectedPile =
     case selectedPile of
@@ -300,10 +305,6 @@ findResolution nodeName pile =
                 Nothing ->
                     Nothing
                                           
-pileStrokeWidth : String
-pileStrokeWidth =
-    "3"
-
 playerNodes : List (Int, List (Int, List (String, (Int, Int))))
 playerNodes =
     [ ( 2
@@ -409,10 +410,19 @@ nodeColor nodeName info =
                                             else
                                                 otherNodeColor
 
+pileStrokeWidth : String
+pileStrokeWidth =
+    "3"
+
 renderPoints : Maybe StonePile -> RenderInfo -> List (Svg Msg)
 renderPoints selectedPile info =
     let sizes = info.sizes
         sr = toString sizes.stoneRadius
+        placementNode = case info.placement of
+                            Just (Placement _ n) ->
+                                n
+                            _ ->
+                                ""
         draw = (\(c, p) ->
                     let x = toString p.x
                         y = toString p.y
@@ -421,21 +431,34 @@ renderPoints selectedPile info =
                              else
                                  "0"
                         color = nodeColor c info
+                        placements =
+                            if placementNode /= c then
+                                []
+                            else
+                                [ Svg.circle [cx x, cy y, r sr
+                                             , fillOpacity "0.4"
+                                             , opacity "1"
+                                             , stroke placementColor
+                                             , fill placementColor
+                                             ]
+                                      []
+                                ]                                            
                     in
-                        [ Svg.circle [cx x, cy y, r "5", fillOpacity "1"
-                                     , fill color
-                                     , stroke color
-                                     ]
-                              []
-                        , Svg.circle
-                            [cx x, cy y, r sr, fillOpacity "0"
-                            , opacity op
-                            , stroke targetColor
-                            , strokeWidth pileStrokeWidth
-                            , onClick <| NodeClick c
+                        List.append placements
+                            [ Svg.circle [cx x, cy y, r "5", fillOpacity "1"
+                                         , fill color
+                                         , stroke color
+                                         ]
+                                  []
+                            , Svg.circle
+                                [cx x, cy y, r sr, fillOpacity "0"
+                                , opacity op
+                                , stroke targetColor
+                                , strokeWidth pileStrokeWidth
+                                , onClick <| NodeClick c
+                                ]
+                                  []
                             ]
-                            []
-                        ]
                )
         drawText = (\(c, p) ->
                      Svg.text_
