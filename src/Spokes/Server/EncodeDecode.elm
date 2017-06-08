@@ -166,12 +166,6 @@ stringToGameOverReason string number =
                     case String.toInt n of
                         Err _ -> UnknownReason string
                         Ok i -> HomeCircleFullReason i
-
-
-
-
-
-
         "timeout" -> TimeoutReason
         _ -> UnknownReason string
 
