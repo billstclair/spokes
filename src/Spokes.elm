@@ -694,10 +694,10 @@ resolutionLine model =
                   "Player " ++ (toString model.resolver) ++ " please resolve. "
               else
                   if model.resolver == model.playerNumber then
-                      "Please resolve now."
+                      "Please resolve now. "
                   else
                       (getPlayerName model.resolver "Player " model) ++
-                          " is resolving."
+                          " is resolving. "
         , button [ disabled True ] [ text "Place" ]
         ]
 
