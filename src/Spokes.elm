@@ -364,6 +364,7 @@ serverResponse mod server message =
                                 )
                     model2 = { model
                                  | players = players
+                                 , newPlayers = players
                                  , playerNames = playerNames
                                  , playerid = pid
                                  , playerNumber = playerNumber
