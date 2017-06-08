@@ -250,7 +250,7 @@ type ServerPhase
     | PlacementPhase
     | ResolutionPhase
     | ResignedPhase
-    | GameOverPhase
+    | GameOverPhase GameOverReason
 
 type alias PlayerInfo =
     { gameid : String

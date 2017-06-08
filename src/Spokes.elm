@@ -17,6 +17,7 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , StonePile, Color(..)
                                       , Turn, History
                                       , ServerPhase(..), ServerInterface, Message(..)
+                                      , GameOverReason(..)
                                       , movedStoneString, butLast
                                       )
 import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
@@ -60,6 +61,7 @@ type alias Model =
     , players : Int
     , newPlayers : Int
     , playerNames : List (Int, String)
+    , resignedPlayers : List Int
     , turn : Int
     , phase : ServerPhase
     , lastFocus : Int
@@ -100,6 +102,7 @@ initialModel =
     , players = 2
     , newPlayers = 2
     , playerNames = []
+    , resignedPlayers = []
     , turn = 1
     , phase = StartPhase
     , lastFocus = 1
@@ -233,9 +236,11 @@ update msg model =
         ResignGame ->
             ( { model
                   | phase = ResignedPhase
+                  , resignedPlayers = model.playerNumber :: model.resignedPlayers
                   , newGameid = ""
               }
-            , Cmd.none
+            , send model.server
+                <| ResignReq { playerid = model.playerid }
             )
         SetInput player value ->
             ( { model | inputs = Array.set (player-1) value model.inputs }
@@ -328,6 +333,13 @@ update msg model =
                     ( { model | serverUrl = String.trim url }
                     , Cmd.none
                     )
+
+adjoin : a -> List a -> List a
+adjoin a list =
+    if List.member a list then
+        list
+    else
+        a :: list
 
 serverResponse : Model -> ServerInterface Msg -> Message -> (Model, Cmd Msg)
 serverResponse mod server message =
@@ -459,6 +471,30 @@ serverResponse mod server message =
                           , selectedPile = Nothing
                           , resolver = resolver
                           , phase = phase
+                      }
+                    , Cmd.none
+                    )
+            ResignRsp { gameid, number } ->
+                if gameid /= model.gameid then
+                    ( model, Cmd.none )
+                else
+                    ( { model
+                          | resignedPlayers = adjoin number model.resignedPlayers
+                      }
+                    , Cmd.none
+                    )
+            GameOverRsp { gameid, reason } ->
+                if gameid /= model.gameid then
+                    ( model, Cmd.none )
+                else
+                    ( { model
+                          | resignedPlayers =
+                              case reason of
+                                  ResignationReason p ->
+                                      adjoin p model.resignedPlayers
+                                  _ ->
+                                      model.resignedPlayers
+                          , phase = GameOverPhase reason
                       }
                     , Cmd.none
                     )
@@ -727,10 +763,28 @@ resignedLine model =
         , button [ disabled True ] [ text "Resigned" ]
         ]
 
-gameOverLine : Model -> Html Msg
-gameOverLine model =
+gameOverReasonText : Model -> GameOverReason -> String
+gameOverReasonText model reason =
+    let pname = (\player ->
+                     getPlayerName player "Player " model
+                )
+    in
+        case reason of
+            ResignationReason player ->
+                (pname player) ++ " resigned."
+            UnresolvableReason ->
+                "Unresolvable."
+            HomeCircleFullReason player ->
+                (pname player) ++ "'s home circle is full."
+            TimeoutReason ->
+                "The server timed out."
+            UnknownReason text ->
+                text
+
+gameOverLine : Model -> GameOverReason -> Html Msg
+gameOverLine model reason =
     span []
-        [ text "Game over. Click 'New Game' or 'Join Game' for another. "
+        [ text <| "Game over. " ++ (gameOverReasonText model reason)
         , button [ disabled True ] [ text "Game Over" ]
         ]
 
@@ -786,7 +840,7 @@ renderGamePage model =
                       PlacementPhase -> placementLine model
                       ResolutionPhase -> resolutionLine model
                       ResignedPhase -> resignedLine model
-                      GameOverPhase -> resignedLine model
+                      GameOverPhase reason -> gameOverLine model reason
                 ]
             , p []
                 [ b [ text "Placement Click Color: " ]
@@ -859,8 +913,8 @@ renderGamePage model =
 
 pages : List (Page, String)
 pages =
-    [ ( HelpPage, "help" )
-    , ( RulesPage, "rules" )
+    [ ( HelpPage, "Help" )
+    , ( RulesPage, "Rules" )
     ]
 
 pageLink : Page -> (Page, String) -> Html Msg
@@ -1036,7 +1090,14 @@ getPlayerName player prefix model =
 inputItem : Int -> Model -> Html Msg
 inputItem player model =
     span []
-        [ b [ text <| (getPlayerName player "" model) ++ ": " ]
+        [ b [ span (if List.member player model.resignedPlayers then
+                        [ class "resigned" ]
+                    else
+                        []
+                   )
+                  [ text <| getPlayerName player "" model ]
+            , text ": "
+            ]
         , input [ type_ "text"
                 , onInput <| SetInput player
                 , disabled

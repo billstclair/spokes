@@ -116,7 +116,7 @@ phaseToString phase =
         PlacementPhase -> "placement"
         ResolutionPhase -> "resolution"
         ResignedPhase -> "resigned"
-        GameOverPhase -> "gameover"
+        GameOverPhase _ -> "gameover"
 
 checkOnlyGameid : ServerState -> Message -> String -> Result Message GameState
 checkOnlyGameid state message gameid =
