@@ -228,6 +228,7 @@ update msg model =
                           , gameid = gameid
                           , newGameid = gameid
                           , phase = JoinPhase
+                          , serverUrl = model.serverUrl
                       }
                     , send server
                         <| JoinReq { gameid = gameid
