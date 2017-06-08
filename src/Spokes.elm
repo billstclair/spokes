@@ -675,7 +675,7 @@ joinLine : Model -> Html Msg
 joinLine model =
     span []
         [ text "Waiting for players to join. "
-        , button [ disabled True ] [ text "Place" ]
+        , button [ disabled True ] [ text "Wait" ]
         ]
 
 placementLine : Model -> Html Msg
@@ -702,7 +702,7 @@ resolutionLine model =
                   else
                       (getPlayerName model.resolver "Player " model) ++
                           " is resolving. "
-        , button [ disabled True ] [ text "Place" ]
+        , button [ disabled True ] [ text "Resolve" ]
         ]
 
 playButton : Html Msg
