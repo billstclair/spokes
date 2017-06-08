@@ -62,7 +62,12 @@ protocolData =
     , NewReq { players = 2, name = "Fred" }
     , NewRsp { gameid = "asdf", playerid = "p1", players = 4, name = "John" }
     , JoinReq { gameid = "asdf", name = "bill" }
-    , JoinRsp { gameid = "asdf", playerid = Just "p1", name = "bill", number = 1 }
+    , JoinRsp { gameid = "asdf"
+              , players = 2
+              , name = "bill"
+              , playerid = Just "p1"
+              , number = 1
+              }
     , PlaceReq { playerid = "p1", placement = Placement White "C1" }
     , PlaceReq { playerid = "p2", placement = Placement Black "D1" }
     , PlaceRsp { gameid = "asdf", number = 2 }

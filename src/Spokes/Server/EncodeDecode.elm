@@ -311,7 +311,7 @@ parseResponse msg params rawMessage =
                     _ ->
                         rawMessage
         "join" ->
-            let { gameid, name, playerid, number } = params
+            let { gameid, players, name, playerid, number } = params
             in
                 case number of
                     Nothing ->
@@ -319,10 +319,16 @@ parseResponse msg params rawMessage =
                     Just num ->
                         case allStrings [gameid, name] of
                             Just [gid, n] ->
-                                JoinRsp { gameid = gid
-                                        , playerid = playerid
-                                        , name = n
-                                        , number = num}
+                                case players of
+                                    Nothing ->
+                                        rawMessage
+                                    Just ps ->
+                                        JoinRsp { gameid = gid
+                                                , players = ps
+                                                , name = n
+                                                , playerid = playerid
+                                                , number = num
+                                                }
                             _ ->
                                 rawMessage
         "place" ->
@@ -492,10 +498,11 @@ messageEncoder message =
                                      ]
         JoinReq { gameid, name } ->
             messageValue "req" "join" [("gameid", gameid), ("name", name)]
-        JoinRsp { gameid, name, playerid, number } ->
+        JoinRsp { gameid, players, name, playerid, number } ->
             messageValue "rsp" "join"
                 <| List.concat
                     [ [ ("gameid", gameid)
+                      , ("players", toString players)
                       , ("name", name)
                       ]
                     , case playerid of

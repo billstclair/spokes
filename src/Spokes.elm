@@ -220,6 +220,7 @@ update msg model =
                           , newIsLocal = isLocal
                           , server = server
                           , gameid = gameid
+                          , newGameid = gameid
                       }
                     , send server
                         <| JoinReq { gameid = gameid
@@ -339,8 +340,8 @@ serverResponse mod server message =
                   else
                       Cmd.none
                 )
-            JoinRsp { gameid, name, playerid, number } ->
-                let done = number >= model.players
+            JoinRsp { gameid, players, name, playerid, number } ->
+                let done = number >= players
                     cmd = if (not done) && model.isLocal then
                               send server
                                   <| JoinReq { gameid = gameid, name = "bill" }
@@ -362,7 +363,8 @@ serverResponse mod server message =
                                       number
                                 )
                     model2 = { model
-                                 | playerNames = playerNames
+                                 | players = players
+                                 , playerNames = playerNames
                                  , playerid = pid
                                  , playerNumber = playerNumber
                                  , lastFocus = lastFocus
@@ -752,7 +754,19 @@ renderGamePage model =
                 <| SetInputColor Black
             ]
         , p []
-            [ Board.render model.selectedPile model.displayList model.renderInfo ]
+            [ let renderInfo = model.renderInfo
+                  ri = if model.isLocal then
+                           renderInfo
+                       else
+                           { renderInfo
+                               | players = Just model.players
+                               , playerNumber = Just model.playerNumber
+                               , resolver = Just model.resolver
+                           }
+              in
+                  Board.render
+                      model.selectedPile model.displayList ri
+            ]
         , p [] [ b [ text "Players: " ]
                , radio "players" "2 " (model.newPlayers == 2) <| SetPlayers 2
                , radio "players" "4 " (model.newPlayers == 4) <| SetPlayers 4

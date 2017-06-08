@@ -85,6 +85,9 @@ type alias RenderInfo =
     , locations : Dict String Point
     , textLocations : Dict String Point
     , stoneLocations  : Dict String (Point, Point)
+    , players : Maybe Int
+    , playerNumber : Maybe Int
+    , resolver : Maybe Int
     }
 
 type Color
@@ -211,9 +214,17 @@ type Message
     = RawMessage String String (List (String, String))
     -- Basic game play
     | NewReq { players : Int, name : String }
-    | NewRsp { gameid : String, playerid : String, players : Int, name : String }
+    | NewRsp { gameid : String
+             , players : Int
+             , name : String
+             , playerid : String
+             }
     | JoinReq { gameid : String, name : String }
-    | JoinRsp { gameid : String, name : String, playerid: Maybe String, number : Int }
+    | JoinRsp { gameid : String
+              , players : Int
+              , name : String
+              , playerid: Maybe String
+              , number : Int }
     | PlaceReq { playerid : String, placement : Move }
     | PlaceRsp { gameid : String, number : Int }
     | PlacedRsp { gameid : String, placements : List Move }

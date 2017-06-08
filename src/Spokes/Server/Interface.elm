@@ -256,8 +256,9 @@ joinReq state gameState message gameid name =
         playerid = toString player --temporary in real server
         joinDone = (player == gameState.players)
         msg = JoinRsp { gameid = gameid
-                      , playerid = Just playerid
+                      , players = gameState.players
                       , name = name
+                      , playerid = Just playerid
                       , number = player
                       }
         gs2 = { gameState

@@ -211,6 +211,9 @@ renderInfo diameter =
         , locations = Dict.fromList locations
         , textLocations = Dict.fromList textLocations
         , stoneLocations = Dict.fromList stoneLocations
+        , players = Nothing
+        , playerNumber = Nothing
+        , resolver = Nothing
         }
 
 circle : String -> String -> Svg msg
@@ -301,6 +304,111 @@ pileStrokeWidth : String
 pileStrokeWidth =
     "3"
 
+playerNodes : List (Int, List (Int, List (String, (Int, Int))))
+playerNodes =
+    [ ( 2
+      , [ ( 1
+          , [ ("B", (1, 2))
+            , ("C", (1, 4))
+            , ("D", (1, 8))
+            ]
+          )
+        , ( 2
+          , [ ("B", (3, 4))
+            , ("C", (5, 8))
+            , ("D", (9, 16))
+            ]
+          )
+        ]
+      )
+    , ( 4
+      , [ ( 1
+          , [ ("B", (1, 1))
+            , ("C", (1, 2))
+            , ("D", (1, 4))
+            ]
+          )
+        , ( 2
+          , [ ("B", (2, 2))
+            , ("C", (3, 4))
+            , ("D", (5, 8))
+            ]
+          )
+        , ( 3
+          , [ ("B", (3, 3))
+            , ("C", (5, 6))
+            , ("D", (9, 12))
+            ]
+          )
+        , ( 2
+          , [ ("B", (4, 4))
+            , ("C", (7, 8))
+            , ("D", (13, 16))
+            ]
+          )
+        ]
+      )
+    ]
+
+isPlayerNode : Int -> Int -> String -> Int -> Bool
+isPlayerNode players playerNumber circle digit =
+    case LE.find (\(ps, _) -> ps == players) playerNodes of
+        Nothing ->
+            False
+        Just (_, pnodes) ->
+            case LE.find (\(p, _) -> p == playerNumber) pnodes of
+                Nothing ->
+                    False
+                Just (_, cnodes) ->
+                    case LE.find (\(c, _) -> c == circle) cnodes of
+                        Nothing ->
+                            False
+                        Just (_, (min, max)) ->
+                            (digit >= min) && (digit <= max)
+
+playerNodeColor : String
+playerNodeColor =
+    "green"
+
+resolverNodeColor : String
+resolverNodeColor =
+    "red"
+
+otherNodeColor : String
+otherNodeColor =
+    "black"
+
+nodeColor : String -> RenderInfo -> String
+nodeColor nodeName info =
+    case info.players of
+        Nothing ->
+            otherNodeColor
+        Just players ->
+            case info.playerNumber of
+                Nothing -> otherNodeColor
+                Just playerNumber ->
+                    case parseNodeName nodeName of
+                        Err _ ->
+                            otherNodeColor
+                        Ok (circle, i) ->
+                            let c = if circle == "" then "D" else circle
+                            in
+                                if isPlayerNode players playerNumber c i then
+                                    playerNodeColor
+                                else
+                                    case if players == 4 then
+                                             info.resolver
+                                         else
+                                             Nothing
+                                    of
+                                        Nothing ->
+                                            otherNodeColor
+                                        Just resolver ->
+                                            if isPlayerNode players resolver c i then
+                                                resolverNodeColor
+                                            else
+                                                otherNodeColor
+
 renderPoints : Maybe StonePile -> RenderInfo -> List (Svg Msg)
 renderPoints selectedPile info =
     let sizes = info.sizes
@@ -312,8 +420,13 @@ renderPoints selectedPile info =
                                  "1"
                              else
                                  "0"
+                        color = nodeColor c info
                     in
-                        [ Svg.circle [cx x, cy y, r "5", fillOpacity "1"] []
+                        [ Svg.circle [cx x, cy y, r "5", fillOpacity "1"
+                                     , fill color
+                                     , stroke color
+                                     ]
+                              []
                         , Svg.circle
                             [cx x, cy y, r sr, fillOpacity "0"
                             , opacity op

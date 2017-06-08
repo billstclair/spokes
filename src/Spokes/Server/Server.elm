@@ -197,7 +197,7 @@ processResponse model socket state response =
                 ( model4
                 , sendToOne response socket
                 )
-        JoinRsp { gameid, name, playerid, number } ->
+        JoinRsp { gameid, players, name, playerid, number } ->
              let (pid, model2) = newPlayerid model
                  playerInfo = { gameid = gameid
                               , number = number
@@ -234,11 +234,13 @@ processResponse model socket state response =
                                       model2.socketsDict
                           }
                  rsp = JoinRsp { gameid = gameid
+                               , players = players
                                , name = name
                                , playerid = Just pid
                                , number = number
                                }
                  rsp2 = JoinRsp { gameid = gameid
+                                , players = players
                                 , name = name
                                 , playerid = Nothing
                                 , number = number
@@ -249,6 +251,7 @@ processResponse model socket state response =
                                              []
                                          Just { number, name } ->
                                              [ JoinRsp { gameid = gameid
+                                                       , players = players
                                                        , name = name
                                                        , playerid = Nothing
                                                        , number = number
