@@ -18,7 +18,7 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , Turn, History
                                       , ServerPhase(..), ServerInterface, Message(..)
                                       , GameOverReason(..)
-                                      , movedStoneString, butLast
+                                      , movedStoneString, butLast, adjoin
                                       )
 import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , computeDisplayList, findResolution
@@ -227,6 +227,7 @@ update msg model =
                           , server = server
                           , gameid = gameid
                           , newGameid = gameid
+                          , phase = JoinPhase
                       }
                     , send server
                         <| JoinReq { gameid = gameid
@@ -236,11 +237,20 @@ update msg model =
         ResignGame ->
             ( { model
                   | phase = ResignedPhase
-                  , resignedPlayers = model.playerNumber :: model.resignedPlayers
+                  , resignedPlayers = (if model.isLocal then
+                                           1
+                                       else
+                                           model.playerNumber
+                                      )
+                                      :: model.resignedPlayers
                   , newGameid = ""
               }
             , send model.server
-                <| ResignReq { playerid = model.playerid }
+                <| ResignReq { playerid = if model.isLocal then
+                                              "1"
+                                          else
+                                              model.playerid
+                             }
             )
         SetInput player value ->
             ( { model | inputs = Array.set (player-1) value model.inputs }
@@ -333,13 +343,6 @@ update msg model =
                     ( { model | serverUrl = String.trim url }
                     , Cmd.none
                     )
-
-adjoin : a -> List a -> List a
-adjoin a list =
-    if List.member a list then
-        list
-    else
-        a :: list
 
 serverResponse : Model -> ServerInterface Msg -> Message -> (Model, Cmd Msg)
 serverResponse mod server message =
@@ -481,7 +484,11 @@ serverResponse mod server message =
                     ( { model
                           | resignedPlayers = adjoin number model.resignedPlayers
                       }
-                    , Cmd.none
+                    , if model.isLocal then
+                          send model.server
+                              <| ResignReq { playerid = toString (number+1) }
+                      else
+                          Cmd.none
                     )
             GameOverRsp { gameid, reason } ->
                 if gameid /= model.gameid then

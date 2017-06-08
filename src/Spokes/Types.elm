@@ -17,7 +17,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , Message(..), ServerPhase(..), GameOverReason(..)
                              , GameState, ServerState, ServerInterface(..)
                              , zeroPoint, emptyStonePile, emptyDisplayList
-                             , get, set, butLast
+                             , get, set, butLast, adjoin
                              , movedStoneString, stringToMovedStone
                              )
 
@@ -200,6 +200,12 @@ butLast list =
     in
         loop list []
                     
+adjoin : a -> List a -> List a
+adjoin a list =
+    if List.member a list then
+        list
+    else
+        a :: list
 
 ---
 --- Backend interface
@@ -270,6 +276,7 @@ type alias GameState =
     , phase : ServerPhase
     , unresolvedPiles : List StonePile
     , players : Int
+    , resignedPlayers : List Int
     , turn : Int
     , resolver : Int
     , placements : Dict Int Move

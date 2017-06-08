@@ -21,7 +21,8 @@ import Spokes.Types as Types
     exposing ( Board, DisplayList, Move(..), StonePile, RenderInfo
              , History, Message(..), ServerPhase(..)
              , GameState, ServerState, ServerInterface(..)
-             , butLast
+             , GameOverReason(..)
+             , butLast, adjoin
              )
 import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
                              , getNode, isLegalMove, makeMove, undoMove
@@ -52,6 +53,7 @@ emptyGameState =
     , phase = JoinPhase
     , unresolvedPiles = []
     , players = 2
+    , resignedPlayers = []
     , turn = 1
     , resolver = 1
     , placements = Dict.empty
@@ -220,6 +222,59 @@ processServerMessage state message =
                 Ok (gameState, _) ->
                     updateGameState state
                         <| resolveReq gameState message resolution
+        ResignReq { playerid } ->
+            case checkOnlyPlayerid state message playerid of
+                Err err ->
+                    (state, err)
+                Ok (gameState, number) ->
+                    if List.member number gameState.resignedPlayers then
+                        ( state
+                        , errorRsp message IllegalRequestErr "Already resigned"
+                        )
+                    else
+                        let resignReason = ResignationReason number
+                            gameOverPhase = GameOverPhase resignReason
+                            gameid = gameState.gameid
+                            gameOverMessage =
+                                GameOverRsp { gameid = gameid
+                                            , reason = resignReason
+                                            }
+                            resignMessage = ResignRsp { gameid = gameid
+                                                      , number = number
+                                                      }
+                            gameOverRes = updateGameState
+                                          state ( { gameState
+                                                      | phase = gameOverPhase
+                                                  }
+                                                , gameOverMessage
+                                                )
+                            resignedPlayers = adjoin
+                                              number gameState.resignedPlayers
+                            resignGameState = { gameState
+                                                  | resignedPlayers = resignedPlayers
+                                              }
+                            resignRes = updateGameState
+                                        state ( resignGameState
+                                              , resignMessage
+                                              )
+                        in
+                            case gameState.phase of
+                                GameOverPhase _ ->
+                                    ( state
+                                    , errorRsp
+                                        message IllegalRequestErr "Game is over"
+                                    )
+                                StartPhase ->
+                                    gameOverRes
+                                JoinPhase ->
+                                    gameOverRes
+                                _ ->
+                                    if (gameState.players-1) <=
+                                        (List.length resignedPlayers)
+                                    then
+                                        gameOverRes
+                                    else
+                                        resignRes
         -- Errors
         UndoReq { playerid, message } ->
             case checkOnlyPlayerid state message playerid of
