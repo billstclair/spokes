@@ -8,7 +8,7 @@ import Maybe exposing ( withDefault )
 
 import Spokes.Server.EncodeDecode as ED
 import Spokes.Types as Types exposing ( Move(..), Color(..), MovedStone(..)
-                                      , Message(..)
+                                      , Message(..), GameOverReason(..)
                                       )
 
 log = Debug.log
@@ -75,6 +75,13 @@ protocolData =
     , ResolveReq { playerid = "p2", resolution = Resolution MoveBlack "D2" "2" }
     , ResolveReq { playerid = "p1", resolution = Resolution MoveBlock "C3" "D3" }
     , ResolveRsp { gameid = "asdf", resolution = Resolution MoveBlock "C3" "D3" }
+    , ResignReq { playerid = "p1" }
+    , ResignRsp { gameid = "asdf", number = 1 }
+    , GameOverRsp { gameid = "asdf", reason = ResignationReason 2 }
+    , GameOverRsp { gameid = "asdf", reason = UnresolvableReason }
+    , GameOverRsp { gameid = "asdf", reason = HomeCircleFullReason 1 }
+    , GameOverRsp { gameid = "asdf", reason = TimeoutReason }
+    , GameOverRsp { gameid = "asdf", reason = UnknownReason "unknown" }
     , UndoReq { playerid = "p1"
               , message = PlacedRsp
                           { gameid = "asdf"

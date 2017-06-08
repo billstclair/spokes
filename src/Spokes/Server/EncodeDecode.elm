@@ -13,7 +13,7 @@ module Spokes.Server.EncodeDecode exposing ( messageDecoder, decodeMessage
                                            , messageEncoder, encodeMessage
                                            )
 
-import Spokes.Types exposing ( Color(..), Move(..), Message(..)
+import Spokes.Types exposing ( Color(..), Move(..), Message(..), GameOverReason(..)
                              , movedStoneString, stringToMovedStone
                              , get
                              )
@@ -50,6 +50,7 @@ type alias MessageParams =
     , request : Maybe String
     , id : Maybe Int
     , text : Maybe String
+    , reason : Maybe GameOverReason
     }
 
 rawMessageToParams : Message -> Maybe MessageParams
@@ -72,6 +73,9 @@ rawMessageToParams message =
                  , request = get "request" plist
                  , id = maybeInt <| get "id" plist
                  , text = get "text" plist
+                 , reason = maybeGameOverReason
+                            (get "reason" plist)
+                            (get "reasonnumber" plist)
                  }
         _ ->
             Nothing
@@ -143,6 +147,50 @@ maybeMessage ms =
                     Nothing
                 Ok m ->
                     Just m            
+
+stringToGameOverReason : String -> Maybe String -> GameOverReason
+stringToGameOverReason string number =
+    case string of
+        "resignation" ->
+            case number of
+                Nothing -> UnknownReason string
+                Just n ->
+                    case String.toInt n of
+                        Err _ -> UnknownReason string
+                        Ok i -> ResignationReason i
+        "unresolvable" -> UnresolvableReason
+        "homecirclefull" ->
+            case number of
+                Nothing -> UnknownReason string
+                Just n ->
+                    case String.toInt n of
+                        Err _ -> UnknownReason string
+                        Ok i -> HomeCircleFullReason i
+
+
+
+
+
+
+        "timeout" -> TimeoutReason
+        _ -> UnknownReason string
+
+gameOverReasonToString : GameOverReason -> (String, Maybe String)
+gameOverReasonToString reason =
+    case reason of
+        ResignationReason n -> ("resignation", Just (toString n))
+        UnresolvableReason -> ("unresolvable", Nothing)
+        HomeCircleFullReason n -> ("homecirclefull", Just (toString n))
+        TimeoutReason -> ("timeout", Nothing)
+        UnknownReason s -> (s, Nothing)
+
+maybeGameOverReason : Maybe String -> Maybe String -> Maybe GameOverReason
+maybeGameOverReason gos number =
+    case gos of
+        Nothing ->
+            Nothing
+        Just s ->
+            Just <| stringToGameOverReason s number
 
 decodeMessage : String -> Result String Message
 decodeMessage string =
@@ -230,6 +278,14 @@ parseRequest msg params rawMessage =
                                 UndoReq { playerid = pid
                                         , message = mes
                                         }
+        "resign" ->
+            let { playerid } = params
+            in
+                case playerid of
+                    Nothing ->
+                        rawMessage
+                    Just pid ->
+                        ResignReq { playerid = pid }
         "chat" ->
             let { playerid, text } = params
             in
@@ -317,6 +373,36 @@ parseResponse msg params rawMessage =
                                 ResolveRsp { gameid = gid
                                            , resolution = res
                                            }
+        "resign" ->
+            let { gameid, number } = params
+            in
+                case gameid of
+                    Nothing ->
+                        rawMessage
+                    Just gid ->
+                        case number of
+                            Nothing ->
+                                rawMessage
+                            Just num ->
+                                ResignRsp { gameid = gid
+                                          , number = num
+                                          }
+
+        "gameover" ->
+            let { gameid, reason } = params
+            in
+                case gameid of
+                    Nothing ->
+                        rawMessage
+                    Just gid ->
+                        case reason of
+                            Nothing ->
+                                rawMessage
+                            Just reas ->
+                                GameOverRsp { gameid = gid
+                                            , reason = reas
+                                            }
+
         "undo" ->
             let { gameid, message } = params
             in
@@ -455,6 +541,23 @@ messageEncoder message =
                                              , ("from", from)
                                              , ("to", to)
                                              ]
+        -- End of game
+        ResignReq { playerid } ->
+            messageValue "req" "resign" [ ("playerid", playerid) ]
+        ResignRsp { gameid, number } ->
+            messageValue "rsp" "resign" [ ("gameid", gameid)
+                                        , ("number", toString number) ]
+        GameOverRsp { gameid, reason } ->
+            let (s, number) = gameOverReasonToString reason
+                params = case number of
+                             Nothing -> [ ("gameid", gameid)
+                                        , ("reason", s)]
+                             Just i -> [ ("gameid", gameid)
+                                       , ("reason", s)
+                                       , ("reasonnumber", i)
+                                       ]
+            in
+                messageValue "rsp" "gameover" params
         -- Errors
         UndoReq { playerid, message } ->
             messageValue "req" "undo" [ ("playerid", playerid)

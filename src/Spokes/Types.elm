@@ -14,7 +14,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , Color(..), MovedStone(..), NodeClassification(..)
                              , Move(..), Turn, History
                              , StonePile, DisplayList
-                             , Message(..), ServerPhase(..)
+                             , Message(..), ServerPhase(..), GameOverReason(..)
                              , GameState, ServerState, ServerInterface(..)
                              , zeroPoint, emptyStonePile, emptyDisplayList
                              , get, set, butLast
@@ -200,6 +200,13 @@ butLast list =
 --- Backend interface
 ---
 
+type GameOverReason
+    = ResignationReason Int
+    | UnresolvableReason
+    | HomeCircleFullReason Int
+    | TimeoutReason
+    | UnknownReason String
+
 type Message
     = RawMessage String String (List (String, String))
     -- Basic game play
@@ -212,6 +219,10 @@ type Message
     | PlacedRsp { gameid : String, placements : List Move }
     | ResolveReq { playerid : String, resolution : Move }
     | ResolveRsp { gameid : String, resolution : Move }
+    -- End of game
+    | ResignReq { playerid : String }
+    | ResignRsp { gameid : String, number: Int }
+    | GameOverRsp { gameid : String, reason: GameOverReason }
     -- Errors
     | UndoReq { playerid : String, message: Message }
     | UndoRsp { gameid : String, message: Message }
