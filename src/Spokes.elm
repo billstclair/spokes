@@ -503,6 +503,7 @@ serverResponse mod server message =
                                   _ ->
                                       model.resignedPlayers
                           , phase = GameOverPhase reason
+                          , newGameid = ""
                       }
                     , Cmd.none
                     )
