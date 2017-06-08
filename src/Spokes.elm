@@ -307,7 +307,10 @@ update msg model =
                 Just pile ->
                     maybeMakeMove nodeName pile model
         PileClick pile ->
-            if (not model.isLocal) && (model.resolver /= model.playerNumber) then
+            if (model.phase /= ResolutionPhase) ||
+                ((not model.isLocal) &&
+                     (model.resolver /= model.playerNumber))
+            then
                 ( model, Cmd.none )
             else
                 case model.selectedPile of
