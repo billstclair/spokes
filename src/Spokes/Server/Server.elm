@@ -300,13 +300,34 @@ processResponse model socket state response =
                                         )
                 sockets = case Dict.get gameid model2.socketsDict of
                               Nothing ->
-                                  [socket]
+                                  [socket] --can't happen
                               Just socks ->
                                   socks
+                model3 = processGameOver response model2
             in
-                ( { model2 | state = state }
+                ( { model3 | state = state }
                 , sendToMany response sockets
                 )
+
+processGameOver : Message -> Model -> Model
+processGameOver message model =
+    case message of
+        GameOverRsp { gameid } ->
+            let socketsDict = model.socketsDict
+            in
+                case Dict.get gameid socketsDict of
+                    Nothing ->
+                        model
+                    Just sockets ->
+                        let gameidDict =
+                                List.foldl Dict.remove model.gameidDict sockets
+                        in
+                            { model
+                                | gameidDict = gameidDict
+                                , socketsDict = Dict.remove gameid socketsDict
+                            }
+        _ ->
+            model
 
 responseGameid : Message -> String
 responseGameid message =
