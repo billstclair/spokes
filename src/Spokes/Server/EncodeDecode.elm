@@ -57,25 +57,28 @@ rawMessageToParams : Message -> Maybe MessageParams
 rawMessageToParams message =
     case message of
         RawMessage typ msg plist ->
-            Just { req = if typ == "req" then Just msg else Nothing
-                 , rsp = if typ == "rsp" then Just msg else Nothing
-                 , players = maybeInt <| get "players" plist
-                 , gameid = get "gameid" plist
-                 , playerid = get "playerid" plist
-                 , name = get "name" plist
-                 , number = maybeInt <| get "number" plist
-                 , turn = maybeInt <| get "turn" plist
-                 , resolver = maybeInt <| get "resolver" plist
-                 , placement = maybePlacement <| get "placement" plist
-                 , placements = maybePlacements <| get "placements" plist
-                 , resolution = maybeResolution plist
-                 , message = maybeMessage <| get "message" plist
-                 , request = get "request" plist
-                 , id = maybeInt <| get "id" plist
-                 , text = get "text" plist
-                 , reason = maybeGameOverReason
+            let placements = maybePlacements <| get "placements" plist
+            in
+                Just { req = if typ == "req" then Just msg else Nothing
+                     , rsp = if typ == "rsp" then Just msg else Nothing
+                     , players = maybeInt <| get "players" plist
+                     , gameid = get "gameid" plist
+                     , playerid = get "playerid" plist
+                     , name = get "name" plist
+                     , number = maybeInt <| get "number" plist
+                     , turn = maybeInt <| get "turn" plist
+                     , resolver = maybeInt <| get "resolver" plist
+                     , placement = maybePlacement <| get "placement" plist
+                     , placements = placements
+                     , resolution = maybeResolution plist
+                     , message = maybeMessage <| get "message" plist
+                     , request = get "request" plist
+                     , id = maybeInt <| get "id" plist
+                     , text = get "text" plist
+                     , reason = maybeGameOverReason
                             (get "reason" plist)
                             (get "reasonnumber" plist)
+                            placements
                  }
         _ ->
             Nothing
@@ -148,8 +151,8 @@ maybeMessage ms =
                 Ok m ->
                     Just m            
 
-stringToGameOverReason : String -> Maybe String -> GameOverReason
-stringToGameOverReason string number =
+stringToGameOverReason : String -> Maybe String -> Maybe (List Move) -> GameOverReason
+stringToGameOverReason string number placements =
     case string of
         "resignation" ->
             case number of
@@ -158,7 +161,11 @@ stringToGameOverReason string number =
                     case String.toInt n of
                         Err _ -> UnknownReason string
                         Ok i -> ResignationReason i
-        "unresolvable" -> UnresolvableReason
+        "unresolvable" ->
+            case placements of
+                Nothing -> UnknownReason string
+                Just moves ->
+                    UnresolvableReason moves
         "homecirclefull" ->
             case number of
                 Nothing -> UnknownReason string
@@ -169,22 +176,22 @@ stringToGameOverReason string number =
         "timeout" -> TimeoutReason
         _ -> UnknownReason string
 
-gameOverReasonToString : GameOverReason -> (String, Maybe String)
+gameOverReasonToString : GameOverReason -> (String, Maybe String, Maybe (List Move))
 gameOverReasonToString reason =
     case reason of
-        ResignationReason n -> ("resignation", Just (toString n))
-        UnresolvableReason -> ("unresolvable", Nothing)
-        HomeCircleFullReason n -> ("homecirclefull", Just (toString n))
-        TimeoutReason -> ("timeout", Nothing)
-        UnknownReason s -> (s, Nothing)
+        ResignationReason n -> ("resignation", Just (toString n), Nothing)
+        UnresolvableReason moves -> ("unresolvable", Nothing, Just moves)
+        HomeCircleFullReason n -> ("homecirclefull", Just (toString n), Nothing)
+        TimeoutReason -> ("timeout", Nothing, Nothing)
+        UnknownReason s -> (s, Nothing, Nothing)
 
-maybeGameOverReason : Maybe String -> Maybe String -> Maybe GameOverReason
-maybeGameOverReason gos number =
+maybeGameOverReason : Maybe String -> Maybe String -> Maybe (List Move) -> Maybe GameOverReason
+maybeGameOverReason gos number placements =
     case gos of
         Nothing ->
             Nothing
         Just s ->
-            Just <| stringToGameOverReason s number
+            Just <| stringToGameOverReason s number placements
 
 decodeMessage : String -> Result String Message
 decodeMessage string =
@@ -480,6 +487,10 @@ messageValue typ msg params =
     in
         JE.list [ JE.string typ, JE.string msg, JE.object p ]
 
+placementsString : List Move -> String
+placementsString placements =
+    String.join "," <| List.map placementText placements
+
 messageEncoder : Message -> Value
 messageEncoder message =
     case message of
@@ -520,11 +531,7 @@ messageEncoder message =
                                        ]
         PlacedRsp { gameid, placements } ->
             messageValue "rsp" "placed" [ ("gameid", gameid)
-                                        , ("placements",
-                                               String.join ","
-                                               <| List.map
-                                               placementText placements
-                                          )
+                                        , ("placements", placementsString placements)
                                         ]
         ResolveReq { playerid, resolution } ->
             let (color, from, to) = resolutionToStrings resolution
@@ -549,10 +556,18 @@ messageEncoder message =
             messageValue "rsp" "resign" [ ("gameid", gameid)
                                         , ("number", toString number) ]
         GameOverRsp { gameid, reason } ->
-            let (s, number) = gameOverReasonToString reason
+            let (s, number, placements) = gameOverReasonToString reason
                 params = case number of
-                             Nothing -> [ ("gameid", gameid)
-                                        , ("reason", s)]
+                             Nothing ->
+                                 case placements of
+                                     Nothing -> [ ("gameid", gameid)
+                                                , ("reason", s)
+                                                ]
+                                     Just moves ->
+                                         [ ("gameid", gameid)
+                                         , ("reason", s)
+                                         , ("placements", placementsString moves)
+                                         ]
                              Just i -> [ ("gameid", gameid)
                                        , ("reason", s)
                                        , ("reasonnumber", i)

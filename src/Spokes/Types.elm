@@ -221,7 +221,7 @@ adjoin a list =
 
 type GameOverReason
     = ResignationReason Int
-    | UnresolvableReason
+    | UnresolvableReason (List Move)
     | HomeCircleFullReason Int
     | TimeoutReason
     | UnknownReason String

@@ -83,7 +83,11 @@ protocolData =
     , ResignReq { playerid = "p1" }
     , ResignRsp { gameid = "asdf", number = 1 }
     , GameOverRsp { gameid = "asdf", reason = ResignationReason 2 }
-    , GameOverRsp { gameid = "asdf", reason = UnresolvableReason }
+    , GameOverRsp { gameid = "asdf"
+                  , reason = UnresolvableReason [ Placement White "C1"
+                                                , Placement Black "D3"
+                                                ]
+                  }
     , GameOverRsp { gameid = "asdf", reason = HomeCircleFullReason 1 }
     , GameOverRsp { gameid = "asdf", reason = TimeoutReason }
     , GameOverRsp { gameid = "asdf", reason = UnknownReason "unknown" }
