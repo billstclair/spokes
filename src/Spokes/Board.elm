@@ -1437,9 +1437,10 @@ canResolve board info maybeDisplayList =
                                        move :: tail ->
                                            case tryBoard (makeMove move b) bs
                                            of
-                                               (True, bs2) -> (True, bs2)
                                                (False, bs2) ->
                                                    lp b bs2 tail
+                                               res ->
+                                                   res
                               )
                          moves = List.foldl (\p l -> List.append p.resolutions l)
                                  [] piles
