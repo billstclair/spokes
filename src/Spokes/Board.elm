@@ -14,7 +14,7 @@ module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , parsePlacementMove, placementText, colorLetter
                              , isLegalMove, isLegalPlacement, makeMove, undoMove
                              , computeDisplayList, findResolution
-                             , canResolve
+                             , canResolve, boardToString
                              )
 
 import Spokes.Types as Types exposing ( Msg(..), Board, Node
