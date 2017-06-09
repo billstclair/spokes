@@ -15,7 +15,7 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , Move(..), MovedStone(..)
                                       , DisplayList, emptyDisplayList
                                       , StonePile, Color(..)
-                                      , Turn, History
+                                      , Turn, History, newTurn
                                       , ServerPhase(..), ServerInterface, Message(..)
                                       , GameOverReason(..)
                                       , movedStoneString, butLast, adjoin
@@ -83,14 +83,6 @@ type alias Model =
 
 initialInputs : Array String
 initialInputs = Array.repeat 4 ""
-
-newTurn : Int -> Int -> Turn
-newTurn number resolver =
-    { number = number
-    , resolver = resolver
-    , placements = []
-    , resolutions = []
-    }
 
 initialModel : Model
 initialModel =

@@ -14,7 +14,7 @@ module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , parsePlacementMove, placementText, colorLetter
                              , isLegalMove, isLegalPlacement, makeMove, undoMove
                              , computeDisplayList, findResolution
-                             , canResolve, boardToString
+                             , canResolve, boardToString, makePlacements
                              )
 
 import Spokes.Types as Types exposing ( Msg(..), Board, Node
@@ -1429,7 +1429,7 @@ canResolve board info maybeDisplayList =
                             if Set.member s bs then
                                 (False, bs)
                             else
-                                let bs2 = Set.insert (log "s" s) bs
+                                let bs2 = Set.insert s bs
                                     dl = computeDisplayList b info
                                 in
                                     loop b dl bs2
@@ -1452,7 +1452,7 @@ canResolve board info maybeDisplayList =
                                                res ->
                                                    res
                               )
-                         moves = log "moves" <| List.foldl (\p l -> List.append p.resolutions l)
+                         moves = List.foldl (\p l -> List.append p.resolutions l)
                                  [] piles
                      in
                          lp brd brds moves
@@ -1472,3 +1472,15 @@ canResolve board info maybeDisplayList =
     in
         loop board dl (Set.singleton <| boardToString board)
             |> Tuple.first
+
+makePlacements : Board -> List String -> Board
+makePlacements board placements =
+    let place = (\placement brd ->
+                     case parsePlacementMove placement of
+                         Err _ ->
+                             brd
+                         Ok move ->
+                             makeMove move brd
+                )
+    in
+        List.foldl place board placements

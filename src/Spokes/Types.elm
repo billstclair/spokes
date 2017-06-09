@@ -12,7 +12,7 @@
 module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , Point, Sizes, RenderInfo
                              , Color(..), MovedStone(..), NodeClassification(..)
-                             , Move(..), Turn, History
+                             , Move(..), Turn, History, newTurn
                              , StonePile, DisplayList
                              , Message(..), ServerPhase(..), GameOverReason(..)
                              , GameState, ServerState, ServerInterface(..)
@@ -141,6 +141,14 @@ type alias Turn =
 
 type alias History =
     List Turn
+
+newTurn : Int -> Int -> Turn
+newTurn number resolver =
+    { number = number
+    , resolver = resolver
+    , placements = []
+    , resolutions = []
+    }
 
 type alias StonePile =
     { nodeName : String

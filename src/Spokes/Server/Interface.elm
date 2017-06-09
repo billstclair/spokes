@@ -19,7 +19,7 @@ import Spokes.Server.EncodeDecode exposing ( encodeMessage )
 import Spokes.Server.Error exposing ( ServerError(..), errnum )
 import Spokes.Types as Types
     exposing ( Board, DisplayList, Move(..), StonePile, RenderInfo
-             , History, Message(..), ServerPhase(..)
+             , History, newTurn, Message(..), ServerPhase(..)
              , GameState, ServerState, ServerInterface(..)
              , GameOverReason(..)
              , butLast, adjoin
@@ -381,7 +381,7 @@ placeReq state message placement number =
                                         makeMove state.board placementsList
                                 else
                                     state.board
-                        (phase, unresolvedPiles) =
+                        (phase, unresolvedPiles, turn, resolver) =
                              if done then
                                  let displayList =
                                          computeDisplayList
@@ -389,26 +389,36 @@ placeReq state message placement number =
                                  in
                                      case displayList.unresolvedPiles of
                                          [] ->
-                                             (PlacementPhase, [])
+                                             ( PlacementPhase, [], state.turn+1
+                                             , (state.resolver % state.players) + 1
+                                             )
                                          piles ->
-                                             (ResolutionPhase, piles)
+                                             ( ResolutionPhase, piles, state.turn
+                                             , state.resolver
+                                             )
                                 else
-                                    (PlacementPhase, [])
-                        history = if done then
-                                      case state.history of
-                                          turn :: tail ->
-                                              { turn
-                                                  | placements = placementsList
-                                              } :: tail
-                                          history ->
-                                              history
+                                    (PlacementPhase, [], state.turn, state.resolver)
+                        his = if done then
+                                  case state.history of
+                                      turn :: tail ->
+                                          { turn
+                                              | placements = placementsList
+                                          } :: tail
+                                      history ->
+                                          history
+                              else
+                                  state.history
+                        history = if done && (phase == PlacementPhase) then
+                                      (newTurn turn resolver) ::his
                                   else
-                                      state.history
+                                      his
                     in
                         ( { state
                               | placements = plcmnts
                               , board = board
                               , phase = phase
+                              , turn = turn
+                              , resolver = resolver
                               , unresolvedPiles = unresolvedPiles
                               , history = history
                           }
@@ -509,6 +519,10 @@ resolveReq state message resolution =
 undoReq : GameState -> Message -> (GameState, Message)
 undoReq state undoMessage =
     case state.history of
+        [] ->
+            ( state
+            , errorRsp undoMessage IllegalRequestErr "No history"
+            )
         turn :: tail ->
             case undoMessage of
                 PlacedRsp { gameid, placements } ->
@@ -529,6 +543,14 @@ undoReq state undoMessage =
                                       , message = undoMessage
                                       }
                             )
+                    else if turn.resolutions == [] &&
+                              turn.placements == []
+                    then
+                        case undoReq { state | history = tail } undoMessage of
+                            (_, ErrorRsp _ as err) ->
+                                (state, err)
+                            res ->
+                                res
                     else
                         ( state
                         , errorRsp undoMessage IllegalRequestErr
@@ -602,7 +624,3 @@ undoReq state undoMessage =
                     , errorRsp undoMessage IllegalRequestErr
                         "Can only undo placed and resolve responses."
                     )
-        _ ->
-            ( state
-            , errorRsp undoMessage IllegalRequestErr "No history"
-            )
