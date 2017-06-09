@@ -26,6 +26,7 @@ import Spokes.Types as Types
              )
 import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
                              , getNode, isLegalMove, makeMove, undoMove
+                             , canResolve
                              )
 
 
@@ -381,11 +382,11 @@ placeReq state message placement number =
                                         makeMove state.board placementsList
                                 else
                                     state.board
+                        renderInfo = state.renderInfo
                         (phase, unresolvedPiles, turn, resolver) =
                              if done then
                                  let displayList =
-                                         computeDisplayList
-                                             board state.renderInfo
+                                         computeDisplayList board renderInfo
                                  in
                                      case displayList.unresolvedPiles of
                                          [] ->
@@ -412,6 +413,9 @@ placeReq state message placement number =
                                       (newTurn turn resolver) ::his
                                   else
                                       his
+                        gameOver = done &&
+                                   (not <| canResolve
+                                        board renderInfo (Just unresolvedPiles))
                     in
                         ( { state
                               | placements = plcmnts
@@ -423,9 +427,15 @@ placeReq state message placement number =
                               , history = history
                           }
                         , if done then
-                              PlacedRsp { gameid = state.gameid
-                                        , placements = placementsList
-                                        }
+                              if gameOver then
+                                  GameOverRsp { gameid = state.gameid
+                                              , reason =
+                                                  UnresolvableReason placementsList
+                                              }
+                              else
+                                  PlacedRsp { gameid = state.gameid
+                                            , placements = placementsList
+                                            }
                           else
                               placeRsp
                         )

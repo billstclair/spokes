@@ -776,7 +776,7 @@ gameOverReasonText model reason =
         case reason of
             ResignationReason player ->
                 (pname player) ++ " resigned."
-            UnresolvableReason ->
+            UnresolvableReason _ ->
                 "Unresolvable."
             HomeCircleFullReason player ->
                 (pname player) ++ "'s home circle is full."

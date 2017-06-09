@@ -1420,8 +1420,8 @@ boardToString board =
     in
         String.concat list
 
-canResolve : Board -> RenderInfo -> Maybe DisplayList -> Bool
-canResolve board info maybeDisplayList =
+canResolve : Board -> RenderInfo -> Maybe (List StonePile) -> Bool
+canResolve board info unresolvedPiles =
     let tryBoard : Board -> Set String -> (Bool, Set String)
         tryBoard = (\b bs ->
                         let s = boardToString b
@@ -1432,7 +1432,7 @@ canResolve board info maybeDisplayList =
                                 let bs2 = Set.insert s bs
                                     dl = computeDisplayList b info
                                 in
-                                    loop b dl bs2
+                                    loop b dl.unresolvedPiles bs2
                    )
         tryResolutions : Board -> Set String -> List StonePile -> (Bool, Set String)
         tryResolutions =
@@ -1457,20 +1457,21 @@ canResolve board info maybeDisplayList =
                      in
                          lp brd brds moves
             )
-        loop : Board -> DisplayList -> Set String -> (Bool, Set String)
+        loop : Board -> (List StonePile) -> Set String -> (Bool, Set String)
         loop =
-            (\board displayList boards ->
-                 case displayList.unresolvedPiles of
+            (\board piles boards ->
+                 case piles of
                      [] ->
                          (True, boards)
-                     piles ->
+                     _ ->
                          tryResolutions board boards piles
             )
-        dl = case maybeDisplayList of
-                 Just d -> d
-                 Nothing -> computeDisplayList board info
+        piles = case unresolvedPiles of
+                    Just p -> p
+                    Nothing -> computeDisplayList board info
+                                      |> .unresolvedPiles
     in
-        loop board dl (Set.singleton <| boardToString board)
+        loop board piles (Set.singleton <| boardToString board)
             |> Tuple.first
 
 makePlacements : Board -> List String -> Board
