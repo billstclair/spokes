@@ -1411,31 +1411,31 @@ type alias SBDict =
 
 canResolve : Board -> RenderInfo -> Maybe DisplayList -> Bool
 canResolve board info maybeDisplayList =
-    let mapper : Board -> SBDict -> (Bool, SBDict)
-        mapper = (\b bs ->
-                      let s = boardToString board
-                      in
-                          case Dict.get s bs of
-                              Just _ ->
-                                  (False, bs)
-                              Nothing ->
-                                  let bs2 = Dict.insert s True bs
-                                      dl = computeDisplayList b info
-                                  in
-                                      loop b dl bs2
-                 )
+    let tryBoard : Board -> SBDict -> (Bool, SBDict)
+        tryBoard = (\b bs ->
+                        let s = boardToString board
+                        in
+                            case Dict.get s bs of
+                                Just _ ->
+                                    (False, bs)
+                                Nothing ->
+                                    let bs2 = Dict.insert s True bs
+                                        dl = computeDisplayList b info
+                                    in
+                                        loop b dl bs2
+                   )
         tryResolutions : Board -> SBDict -> List StonePile -> (Bool, SBDict)
         tryResolutions =
             (\brd brds piles ->
                  if piles == [] then
                      (False, brds)
                  else
-                     let lp = (\ b bs mvs ->
+                     let lp = (\b bs mvs ->
                                    case mvs of
                                        [] ->
                                            (False, bs)
                                        move :: tail ->
-                                           case mapper (makeMove move b) bs
+                                           case tryBoard (makeMove move b) bs
                                            of
                                                (True, bs2) -> (True, bs2)
                                                (False, bs2) ->
