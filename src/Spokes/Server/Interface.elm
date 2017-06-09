@@ -438,9 +438,9 @@ isLegalResolution move piles =
                     False
                 Just pile ->
                     case pile.resolutions of
-                        Nothing ->
+                        [] ->
                             False
-                        Just moves ->
+                        moves ->
                             List.member move moves
         _ ->
             False

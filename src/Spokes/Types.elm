@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------
 --
--- Board.elm
--- Spokes game board.
+-- Types.elm
+-- Shared types for Spokes game.
 -- Copyright (c) 2017 Bill St. Clair <billstclair@gmail.com>
 -- Some rights reserved.
 -- Distributed under the MIT License
@@ -146,7 +146,7 @@ type alias StonePile =
     { nodeName : String
     , colors : List String
     , location : Point
-    , resolutions : Maybe (List Move)
+    , resolutions : List Move
     }
 
 emptyStonePile : StonePile
@@ -154,7 +154,7 @@ emptyStonePile =
     { nodeName = ""
     , colors = []
     , location = zeroPoint
-    , resolutions = Nothing
+    , resolutions = []
     }
 
 type alias DisplayList =

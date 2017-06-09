@@ -14,6 +14,7 @@ module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , parsePlacementMove, placementText, colorLetter
                              , isLegalMove, isLegalPlacement, makeMove, undoMove
                              , computeDisplayList, findResolution
+                             , canResolve
                              )
 
 import Spokes.Types as Types exposing ( Msg(..), Board, Node
@@ -285,9 +286,9 @@ isNodeInPileResolutions nodeName selectedPile =
 findResolution : String -> StonePile -> Maybe Move
 findResolution nodeName pile =
     case pile.resolutions of
-        Nothing ->
+        [] ->
             Nothing
-        Just res ->
+        res ->
             case LE.find (\r ->
                               case r of
                                   Resolution _ _ n ->
@@ -506,7 +507,7 @@ renderStones selectedPile list info =
         drawPile = (\pile ->
                         let outline = case selectedPile of
                                           Nothing ->
-                                              if pile.resolutions == Nothing then
+                                              if pile.resolutions == [] then
                                                   Nothing
                                               else
                                                   Just needsResolutionColor
@@ -1355,9 +1356,9 @@ computeDisplayList board info =
                         let resolutions = computeResolutions
                                           node stones otherStones board hasForced
                             maybeRes = if resolutions == [] then
-                                           Nothing
+                                           []
                                        else
-                                           Just <| uniqueMoves resolutions
+                                           uniqueMoves resolutions
                         in
                             case stones of
                                 [] ->
@@ -1390,8 +1391,70 @@ computeDisplayList board info =
                                       ]
                    )
         allPiles = List.concatMap drawNode nodes
-        unresolved = List.filter (\pile -> pile.resolutions /= Nothing) allPiles
+        unresolved = List.filter (\pile -> pile.resolutions /= []) allPiles
     in
         { allPiles = allPiles
         , unresolvedPiles = unresolved
         }
+
+boardToString : Board -> String
+boardToString board =
+    let list = Dict.foldl (\name node res ->
+                               ((toString <| node.whiteStones) ++
+                                (toString <| node.blackStones)) :: res)
+               [] board
+    in
+        String.concat list
+
+type alias SBDict =
+    Dict String Bool
+
+canResolve : Board -> RenderInfo -> Maybe DisplayList -> Bool
+canResolve board info maybeDisplayList =
+    let mapper : Board -> SBDict -> (Bool, SBDict)
+        mapper = (\b bs ->
+                      let s = boardToString board
+                      in
+                          case Dict.get s bs of
+                              Just _ ->
+                                  (False, bs)
+                              Nothing ->
+                                  let bs2 = Dict.insert s True bs
+                                      dl = computeDisplayList b info
+                                  in
+                                      loop b dl bs2
+                 )
+        tryResolutions : Board -> SBDict -> List StonePile -> (Bool, SBDict)
+        tryResolutions =
+            (\brd brds piles ->
+                 case piles of
+                     [] -> (False, brds)
+                     pile :: tail ->
+                         case pile.resolutions of
+                             [] ->
+                                 tryResolutions brd brds tail
+                             resol :: resolTail ->
+                                 case mapper (makeMove resol brd) brds
+                                 of
+                                     (True, bs) -> (True, bs)
+                                     (False, bs) ->
+                                         tryResolutions brd bs
+                                             <| { pile
+                                                    | resolutions = resolTail
+                                                } :: tail
+            )
+        loop : Board -> DisplayList -> SBDict -> (Bool, SBDict)
+        loop =
+            (\board displayList boards ->
+                 case displayList.unresolvedPiles of
+                     [] ->
+                         (True, boards)
+                     piles ->
+                         tryResolutions board boards piles
+            )
+        dl = case maybeDisplayList of
+                 Just d -> d
+                 Nothing -> computeDisplayList board info
+    in
+        loop board dl Dict.empty
+            |> Tuple.first

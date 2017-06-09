@@ -316,9 +316,9 @@ update msg model =
                 case model.selectedPile of
                     Nothing ->
                         case pile.resolutions of
-                            Nothing ->
+                            [] ->
                                 ( model, Cmd.none )
-                            Just _ ->
+                            _ ->
                                 ( { model | selectedPile = Just pile }
                                 , Cmd.none
                                 )
