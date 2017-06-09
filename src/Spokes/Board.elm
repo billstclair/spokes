@@ -1427,21 +1427,24 @@ canResolve board info maybeDisplayList =
         tryResolutions : Board -> SBDict -> List StonePile -> (Bool, SBDict)
         tryResolutions =
             (\brd brds piles ->
-                 case piles of
-                     [] -> (False, brds)
-                     pile :: tail ->
-                         case pile.resolutions of
-                             [] ->
-                                 tryResolutions brd brds tail
-                             resol :: resolTail ->
-                                 case mapper (makeMove resol brd) brds
-                                 of
-                                     (True, bs) -> (True, bs)
-                                     (False, bs) ->
-                                         tryResolutions brd bs
-                                             <| { pile
-                                                    | resolutions = resolTail
-                                                } :: tail
+                 if piles == [] then
+                     (False, brds)
+                 else
+                     let lp = (\ b bs mvs ->
+                                   case mvs of
+                                       [] ->
+                                           (False, bs)
+                                       move :: tail ->
+                                           case mapper (makeMove move b) bs
+                                           of
+                                               (True, bs2) -> (True, bs2)
+                                               (False, bs2) ->
+                                                   lp b bs2 tail
+                              )
+                         moves = List.foldl (\p l -> List.append p.resolutions l)
+                                 [] piles
+                     in
+                         lp brd brds moves
             )
         loop : Board -> DisplayList -> SBDict -> (Bool, SBDict)
         loop =
