@@ -26,6 +26,7 @@ import Spokes.Types as Types exposing ( Msg(..), Board, Node
                                       , get, set
                                       )
 import Dict exposing ( Dict )
+import Set exposing ( Set )
 import Html exposing ( Html )
 import Svg exposing (Svg, svg, line, g)
 import Svg.Attributes exposing ( x, y, width, height
@@ -1397,34 +1398,43 @@ computeDisplayList board info =
         , unresolvedPiles = unresolved
         }
 
+nodeToString : Node -> String
+nodeToString node =
+    let ws = toString node.whiteStones
+        bs = toString node.blackStones
+    in
+        if (String.length ws) == 1
+            && (String.length bs) == 1
+        then
+            ws ++ bs
+        else
+            -- This shouldn't happen
+            "[" ++ ws ++ "," ++ bs ++ "]"
+
 boardToString : Board -> String
 boardToString board =
     let list = Dict.foldl (\name node res ->
-                               ((toString <| node.whiteStones) ++
-                                (toString <| node.blackStones)) :: res)
+                               (nodeToString node) :: res
+                          )
                [] board
     in
         String.concat list
 
-type alias SBDict =
-    Dict String Bool
-
 canResolve : Board -> RenderInfo -> Maybe DisplayList -> Bool
 canResolve board info maybeDisplayList =
-    let tryBoard : Board -> SBDict -> (Bool, SBDict)
+    let tryBoard : Board -> Set String -> (Bool, Set String)
         tryBoard = (\b bs ->
-                        let s = boardToString board
+                        let s = boardToString b
                         in
-                            case Dict.get s bs of
-                                Just _ ->
-                                    (False, bs)
-                                Nothing ->
-                                    let bs2 = Dict.insert s True bs
-                                        dl = computeDisplayList b info
-                                    in
-                                        loop b dl bs2
+                            if Set.member s bs then
+                                (False, bs)
+                            else
+                                let bs2 = Set.insert (log "s" s) bs
+                                    dl = computeDisplayList b info
+                                in
+                                    loop b dl bs2
                    )
-        tryResolutions : Board -> SBDict -> List StonePile -> (Bool, SBDict)
+        tryResolutions : Board -> Set String -> List StonePile -> (Bool, Set String)
         tryResolutions =
             (\brd brds piles ->
                  if piles == [] then
@@ -1442,12 +1452,12 @@ canResolve board info maybeDisplayList =
                                                res ->
                                                    res
                               )
-                         moves = List.foldl (\p l -> List.append p.resolutions l)
+                         moves = log "moves" <| List.foldl (\p l -> List.append p.resolutions l)
                                  [] piles
                      in
                          lp brd brds moves
             )
-        loop : Board -> DisplayList -> SBDict -> (Bool, SBDict)
+        loop : Board -> DisplayList -> Set String -> (Bool, Set String)
         loop =
             (\board displayList boards ->
                  case displayList.unresolvedPiles of
@@ -1460,5 +1470,5 @@ canResolve board info maybeDisplayList =
                  Just d -> d
                  Nothing -> computeDisplayList board info
     in
-        loop board dl Dict.empty
+        loop board dl (Set.singleton <| boardToString board)
             |> Tuple.first
