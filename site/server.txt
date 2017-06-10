@@ -1,1 +1,1 @@
-wss://gibgoygames.com/spokes-server/
+wss://gibgoygames.com/spokes-server
