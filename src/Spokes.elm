@@ -192,7 +192,6 @@ update msg model =
                       , serverUrl = model.serverUrl
                       , gameid = ""
                       , newGameid = ""
-                      , phase = JoinPhase
               }
             , send server
                 <| NewReq { players = players
@@ -219,7 +218,7 @@ update msg model =
                           , server = server
                           , gameid = gameid
                           , newGameid = gameid
-                          , phase = JoinPhase
+--                          , phase = JoinPhase
                           , serverUrl = model.serverUrl
                       }
                     , send server
@@ -352,6 +351,7 @@ serverResponse mod server message =
                                         model.newGameid
                                     else
                                         gameid
+                      , phase = JoinPhase
                       , playerid = playerid
                       , playerNames = [(1, name)]
                   }
@@ -399,7 +399,7 @@ serverResponse mod server message =
                           , resolver = 1
                       }
                   else
-                      model2
+                      { model2 | phase = JoinPhase }
                 , cmd
                 )
             PlaceRsp { gameid, number } ->
@@ -905,7 +905,8 @@ renderGamePage model =
                              , br
                              , b [ text "Game ID: " ]
                              , if nostart then
-                                   text model.gameid
+                                   span [ style [("width", "18em")] ]
+                                       [ text model.gameid ]
                                else
                                    input [ type_ "text"
                                      , onInput <| SetGameid
