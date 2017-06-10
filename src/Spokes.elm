@@ -489,18 +489,28 @@ serverResponse mod server message =
                 if gameid /= model.gameid then
                     ( model, Cmd.none )
                 else
-                    ( { model
-                          | resignedPlayers =
-                              case reason of
-                                  ResignationReason p ->
-                                      adjoin p model.resignedPlayers
-                                  _ ->
-                                      model.resignedPlayers
-                          , phase = GameOverPhase reason
-                          , newGameid = ""
-                      }
-                    , Cmd.none
-                    )
+                    let (model2, _) =
+                            case reason of
+                                UnresolvableReason moves ->
+                                    serverResponse model server
+                                        <| PlacedRsp { gameid = gameid
+                                                     , placements = moves
+                                                     }
+                                _ ->
+                                    (model, Cmd.none)
+                    in
+                        ( { model2
+                              | resignedPlayers =
+                                case reason of
+                                    ResignationReason p ->
+                                        adjoin p model.resignedPlayers
+                                    _ ->
+                                        model.resignedPlayers
+                              , phase = GameOverPhase reason
+                              , newGameid = ""
+                          }
+                        , Cmd.none
+                        )
             UndoRsp record ->
                 case record.message of
                     PlacedRsp { placements } ->
@@ -788,6 +798,7 @@ gameOverLine : Model -> GameOverReason -> Html Msg
 gameOverLine model reason =
     span []
         [ text <| "Game over. " ++ (gameOverReasonText model reason)
+        , text " "
         , button [ disabled True ] [ text "Game Over" ]
         ]
 
