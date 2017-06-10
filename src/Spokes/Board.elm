@@ -1310,17 +1310,27 @@ computeResolutions node stones otherStones board hasForced =
                     []
         else
             case stones of
-            ["black", "black"] ->
-                resolutions MoveBlack nodePairForcedResolutions
-            ["white", "white"] ->
-                resolutions MoveWhite nodePairForcedResolutions
-            ["black", "white"] ->
-                if otherStones == ["black", "white"] then
-                    resolutions MoveBlock nodePairForcedResolutions
-                else
+                ["black"] ->
+                    if otherStones == ["black", "white"] then
+                        resolutions MoveBlack nodePairForcedResolutions
+                    else
+                        []
+                ["white"] ->
+                    if otherStones == ["black", "white"] then
+                        resolutions MoveWhite nodePairForcedResolutions
+                    else
+                        []
+                ["black", "black"] ->
+                    resolutions MoveBlack nodePairForcedResolutions
+                ["white", "white"] ->
+                    resolutions MoveWhite nodePairForcedResolutions
+                ["black", "white"] ->
+                    if otherStones == ["black", "white"] then
+                        resolutions MoveBlock nodePairForcedResolutions
+                    else
+                        []
+                _ ->
                     []
-            _ ->
-                []
 
 uniqueMoves : List Move -> List Move
 uniqueMoves moves =
