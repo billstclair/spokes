@@ -218,7 +218,6 @@ update msg model =
                           , server = server
                           , gameid = gameid
                           , newGameid = gameid
---                          , phase = JoinPhase
                           , serverUrl = model.serverUrl
                       }
                     , send server
@@ -905,21 +904,26 @@ renderGamePage model =
                              , br
                              , b [ text "Game ID: " ]
                              , if nostart then
-                                   span [ style [("width", "18em")] ]
+                                   span [ style [ ("font-size","140%")
+                                                , ("font-weight","bold")
+                                                ]
+                                        ]
                                        [ text model.gameid ]
                                else
-                                   input [ type_ "text"
-                                     , onInput <| SetGameid
-                                     , disabled (nostart)
-                                     , size 18
-                                     , value model.newGameid
-                                     ]
-                                     []
-                             , text " "
-                             , button [ onClick JoinGame
-                                      , disabled (nostart)
-                                      ]
-                                      [ text "Join Game" ]
+                                   span []
+                                       [ input [ type_ "text"
+                                               , onInput <| SetGameid
+                                               , disabled (nostart)
+                                               , size 18
+                                               , value model.newGameid
+                                               ]
+                                             []
+                                       , text " "
+                                       , button [ onClick JoinGame
+                                                , disabled (nostart)
+                                                ]
+                                             [ text "Join Game" ]
+                                       ]
                              ]
                    ]
             ]
