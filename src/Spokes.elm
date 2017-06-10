@@ -865,15 +865,17 @@ renderGamePage model =
                 ]
             , p []
                 [ let renderInfo = model.renderInfo
-                      ri = if model.isLocal then
-                               renderInfo
-                           else
-                               { renderInfo
-                                   | players = Just model.players
-                                   , playerNumber = Just model.playerNumber
-                                   , resolver = Just model.resolver
-                                   , placement = model.placement
-                               }
+                      ri = { renderInfo
+                               | players = Just model.players
+                               , playerNumber =
+                                 Just
+                                 <| if model.isLocal then
+                                        model.resolver
+                                    else
+                                        model.playerNumber
+                               , resolver = Just model.resolver
+                               , placement = model.placement
+                           }
                   in
                       Board.render
                       model.selectedPile model.displayList ri
