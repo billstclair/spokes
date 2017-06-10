@@ -889,30 +889,38 @@ renderGamePage model =
                            , value model.name
                            ]
                          []
-                   , br
-                   , b [ text "Game ID: " ]
-                   , input [ type_ "text"
-                           , onInput <| SetGameid
-                           , disabled (model.newIsLocal || nostart)
-                           , size 18
-                           , value model.newGameid
-                           ]
-                         []
-                   , text " "
-                   , button [ onClick JoinGame
-                            , disabled (model.newIsLocal || nostart)
-                            ]
-                         [ text "Join Game" ]
-                   , br
-                   , b [text " URL: " ]
-                   , input [ type_ "text"
-                       , onInput <| SetServerUrl
-                       , disabled (model.newIsLocal || nostart)
-                       , size 50
-                       , value model.serverUrl
-                       ]
-                     []
-               ]
+                   , if model.newIsLocal then
+                         text ""
+                     else
+                         span []
+                             [ br
+                             , b [text " URL: " ]
+                             , input [ type_ "text"
+                                     , onInput <| SetServerUrl
+                                     , disabled (model.newIsLocal || nostart)
+                                     , size 50
+                                     , value model.serverUrl
+                                     ]
+                                     []
+                             , br
+                             , b [ text "Game ID: " ]
+                             , if nostart then
+                                   text model.gameid
+                               else
+                                   input [ type_ "text"
+                                     , onInput <| SetGameid
+                                     , disabled (nostart)
+                                     , size 18
+                                     , value model.newGameid
+                                     ]
+                                     []
+                             , text " "
+                             , button [ onClick JoinGame
+                                      , disabled (nostart)
+                                      ]
+                                      [ text "Join Game" ]
+                             ]
+                   ]
             ]
 
 pages : List (Page, String)
