@@ -809,6 +809,15 @@ joinLine model =
         , button [ disabled True ] [ text "Wait" ]
         ]
 
+placeOnlyLine : Model -> Html Msg
+placeOnlyLine model =
+    span []
+        [ text "Click anywhere to place stones."
+        , button [ disabled True
+                 ]
+              [ text "Place Only" ]
+        ]
+
 placementLine : Model -> Html Msg
 placementLine model =
     span []
@@ -915,13 +924,16 @@ renderGamePage model =
         div []
             [ inputItems model
             , p []
-                [ case model.phase of
-                      StartPhase -> startLine model
-                      JoinPhase -> joinLine model
-                      PlacementPhase -> placementLine model
-                      ResolutionPhase -> resolutionLine model
-                      ResignedPhase -> resignedLine model
-                      GameOverPhase reason -> gameOverLine model reason
+                [ if (isPlaying model) && (placeOnly model) then
+                      placeOnlyLine model
+                  else
+                      case model.phase of
+                          StartPhase -> startLine model
+                          JoinPhase -> joinLine model
+                          PlacementPhase -> placementLine model
+                          ResolutionPhase -> resolutionLine model
+                          ResignedPhase -> resignedLine model
+                          GameOverPhase reason -> gameOverLine model reason
                 ]
             , p []
                 [ b [ text "Placement Click Color: " ]
