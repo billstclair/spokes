@@ -15,6 +15,7 @@ module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , isLegalMove, isLegalPlacement, makeMove, undoMove
                              , computeDisplayList, findResolution
                              , canResolve, boardToString, makePlacements
+                             , isHomeCircleFull
                              )
 
 import Spokes.Types as Types exposing ( Msg(..), Board, Node
@@ -1559,3 +1560,107 @@ makePlacements board placements =
                 )
     in
         List.foldl place board placements
+
+playerHomeSpokes : Int -> Int -> Maybe (List Int)
+playerHomeSpokes player players =
+    let dict = if players == 2 then
+                   twoPlayerSpokes
+               else
+                   fourPlayerSpokes
+    in
+        case Dict.get player dict of
+            Nothing ->
+                Nothing
+            Just circleDict ->
+                Dict.get "" circleDict
+
+isHomeCircleFull : Int -> Board -> RenderInfo -> Bool
+isHomeCircleFull player board info =
+    case info.players of
+        Nothing ->
+            False
+        Just players ->
+            case playerHomeSpokes player players of
+                Nothing ->
+                    False
+                Just spokes ->
+                    areSpokesFull board spokes
+
+areSpokesFull : Board -> List Int -> Bool
+areSpokesFull board spokes =
+    (areSpokesFullFromD board spokes) &&
+        (areSpokesFullFromEnds board spokes)
+
+nodeCounts : Board -> String -> Maybe (Int, Int, Int)
+nodeCounts board nodeName =
+    case Dict.get nodeName board of
+        Nothing ->
+            Nothing
+        Just node ->
+            Just <|
+                ( node.whiteStones
+                , node.blackStones
+                , node.whiteStones + node.blackStones
+                )
+
+fullNodeCounts : Board -> String -> (Int, Int, Int)
+fullNodeCounts board node =
+    Maybe.withDefault (1, 1, 2) <| nodeCounts board node
+
+emptyNodeCounts : Board -> String -> (Int, Int, Int)
+emptyNodeCounts board node =
+    Maybe.withDefault (0, 0, 0) <| nodeCounts board node
+
+canFillWith : Board -> Color -> String -> Int -> Bool
+canFillWith board color nodeName spoke =
+    True
+
+canPushTo : Board -> String -> Int -> Bool
+canPushTo board nodeName spoke =
+    True
+
+canFillSpokeFromD : Board -> Int -> Bool
+canFillSpokeFromD board spoke =
+    let sp = toString spoke
+        (b, w, t) = fullNodeCounts board sp
+    in
+        case t of
+            0 ->
+                canPushTo board sp spoke
+            1 ->
+                let color = if b == 1 then White else Black
+                in
+                    canFillWith board color ("D" ++ sp) spoke
+            _ ->
+                False
+
+areSpokesFullFromD : Board -> List Int -> Bool
+areSpokesFullFromD board spokes =
+    case LE.find (canFillSpokeFromD board) spokes of
+        Just _ ->
+            False
+        Nothing ->
+            True
+
+isSpokeFullFromEnd : Board -> Int -> Int -> Bool
+isSpokeFullFromEnd board spoke other =
+    False
+
+areSpokesFullFromEnds : Board -> List Int -> Bool
+areSpokesFullFromEnds board spokes =
+    case List.head spokes of
+        Nothing ->
+            False               --can't happen
+        Just first ->
+            let other = first-1
+            in
+                if not <| isSpokeFullFromEnd board first other then
+                    False
+                else
+                    case LE.last spokes of
+                        Nothing ->
+                            False --can't happen
+                        Just last ->
+                            let other = (last % 16) + 1
+                            in
+                                isSpokeFullFromEnd board last other
