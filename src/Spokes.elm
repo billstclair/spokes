@@ -867,6 +867,7 @@ renderGamePage model =
                 [ let renderInfo = model.renderInfo
                       ri = { renderInfo
                                | players = Just model.players
+                               , playerNames = model.playerNames
                                , playerNumber =
                                  Just
                                  <| if model.isLocal then

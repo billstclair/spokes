@@ -215,6 +215,7 @@ renderInfo diameter =
         , stoneLocations = Dict.fromList stoneLocations
         , placement = Nothing
         , players = Nothing
+        , playerNames = []
         , playerNumber = Nothing
         , resolver = Nothing
         }
@@ -253,6 +254,7 @@ render selectedPile list info =
                       , renderLines info
                       , renderPoints selectedPile info
                       , renderStones selectedPile list info
+                      , renderNames info
                       ]
             ]
 
@@ -482,6 +484,68 @@ renderPoints selectedPile info =
 lowerStoneYDelta : Int
 lowerStoneYDelta =
     10
+
+nameLocation : Int -> RenderInfo -> Maybe (Point, String)
+nameLocation number info =
+    case info.players of
+        Nothing ->
+            Nothing
+        Just players ->
+            let twoPlayers = (players == 2)
+                top = twoPlayers || number == 1 || number == 4
+                left = if twoPlayers then
+                           number == 2
+                       else
+                           number == 3 || number == 4
+                sizes = info.sizes
+                c = sizes.center
+                r = toFloat sizes.radius
+                x = if left then
+                        c - (round (0.6 * r))
+                    else
+                        c + (round (0.6 * r))
+                y = if top then
+                        c - (round (0.9 * r))
+                    else
+                        c + (round (0.9 * r))
+            in
+                Just ( { x = x, y = y }
+                     , if left then "end" else "start"
+                     )
+
+renderName : Int -> RenderInfo -> List (Svg Msg)
+renderName number info =
+    case nameLocation number info of
+        Nothing ->
+            []
+        Just (p, anchor) ->
+            let name = case LE.find (\(n, _) -> n == number) info.playerNames
+                       of
+                           Just (_, name) ->
+                               name
+                           Nothing ->
+                               "Player " ++ (toString number)
+            in
+                [ Svg.text_
+                      [ x <| toString p.x
+                      , y <| toString p.y
+                      , textAnchor anchor
+                      , dominantBaseline "central"
+                      ]
+                      [ Svg.text name ]
+                ]
+
+renderNames : RenderInfo -> List (Svg Msg)
+renderNames info =
+    case info.players of
+        Nothing ->
+            []
+        Just players ->
+            List.concatMap (\number -> renderName number info)
+                <| if players == 2 then
+                       [1, 2]
+                   else
+                       [1, 2, 3, 4]
 
 renderStones : Maybe StonePile -> DisplayList -> RenderInfo -> List (Svg Msg)
 renderStones selectedPile list info =
