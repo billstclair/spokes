@@ -126,10 +126,12 @@ initialPlayerName number model =
             case LE.getAt (number-1) names of
                 Nothing -> "Player " ++ (toString number)
                 Just n ->
-                    if n == "" then
-                        "Player " ++ (toString number)
-                    else
-                        n
+                    let nam = String.trim n
+                    in
+                        if nam == "" then
+                            "Player " ++ (toString number)
+                        else
+                            nam
     else
         model.name
 
@@ -1125,22 +1127,14 @@ examplePlaceString player =
 
 getPlayerName : Int -> String -> Model -> String
 getPlayerName player prefix model =
-    case if model.isLocal then
-             Nothing
-         else
-             if player == model.playerNumber then
-                 Just "YOU"
-             else
-                 case LE.find (\(n, _) -> n == player) model.playerNames of
-                     Nothing ->
-                         Nothing
-                     Just (_, name) ->
-                         Just name
-    of
-        Nothing ->
-            prefix ++ (toString player)
-        Just name ->
-            name
+    if (not model.isLocal) && (player == model.playerNumber) then
+        "YOU"
+    else
+        case LE.find (\(n, _) -> n == player) model.playerNames of
+            Nothing ->
+                prefix ++ (toString player)
+            Just (_, name) ->
+                name
 
 inputItem : Int -> Model -> Html Msg
 inputItem player model =
