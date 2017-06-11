@@ -122,13 +122,8 @@ initialModel =
     }
 
 send : Model -> ServerInterface msg -> Message -> Cmd msg
-send model interface message =
-    let si = if placeOnly model then
-                 case interface of
-                     ServerInterface sin ->
-                         ServerInterface { sin | placeOnly = True }
-             else
-                 interface
+send model (ServerInterface interface) message =
+    let si = ServerInterface { interface | placeOnly = placeOnly model }
     in
         Interface.send si (log "send" message)
 
@@ -309,7 +304,9 @@ update msg model =
         NodeClick nodeName ->
             case model.selectedPile of
                 Nothing ->
-                    if (model.phase /= PlacementPhase) ||
+                    if placeOnly model then
+                        placeOnlyClick model nodeName
+                    else if (model.phase /= PlacementPhase) ||
                         (String.all Char.isDigit nodeName)
                     then
                         ( model, Cmd.none )
@@ -332,7 +329,9 @@ update msg model =
                 Just pile ->
                     maybeMakeMove nodeName pile model
         PileClick pile ->
-            if (model.phase /= ResolutionPhase) ||
+            if (placeOnly model) && (model.selectedPile == Nothing) then
+                placeOnlyClick model pile.nodeName
+            else if (model.phase /= ResolutionPhase) ||
                 ((not model.isLocal) &&
                      (model.resolver /= model.playerNumber))
             then
@@ -372,6 +371,29 @@ update msg model =
                     ( { model | serverUrl = String.trim url }
                     , Cmd.none
                     )
+
+placeOnlyClick : Model -> String -> (Model, Cmd Msg)
+placeOnlyClick model nodeName =
+    if not <| isPlaying model then
+        (model, Cmd.none)
+    else
+        case Board.getNode nodeName model.board of
+            Nothing ->
+                (model, Cmd.none)
+            Just node ->
+                let count = node.whiteStones + node.blackStones
+                    players = model.players
+                in
+                    if count >= players then
+                        (model, Cmd.none)
+                    else
+                        ( model
+                        , send model model.server
+                            <| PlaceReq { playerid = "1"
+                                        , placement =
+                                            Placement model.inputColor nodeName
+                                        }
+                        )
 
 serverResponse : Model -> ServerInterface Msg -> Message -> (Model, Cmd Msg)
 serverResponse mod server message =
@@ -461,7 +483,7 @@ serverResponse mod server message =
                                         ( model
                                         , send model model.server
                                             <| PlaceReq { playerid =
-                                                              toString (number +1)
+                                                              toString (number+1)
                                                         , placement = placement
                                                         }
                                         )
@@ -476,8 +498,13 @@ serverResponse mod server message =
                                   in
                                       [{ turn | placements = placements }]
                               turn :: tail ->
-                                  { turn | placements = placements }
-                                  :: tail
+                                  let tl = if turn.placements /= [] then
+                                               turn :: tail
+                                           else
+                                               tail
+                                  in
+                                      { turn | placements = placements }
+                                      :: tl
                     displayList = computeDisplayList
                                   board model.renderInfo
                     (resolver, phase, history)

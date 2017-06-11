@@ -225,7 +225,8 @@ processServerMessage state message =
                         (state, err)
                 Ok (gameState, number) ->
                     updateGameState state
-                        <| placeReq gameState message placement number
+                        <| placeReq gameState state.placeOnly
+                            message placement number
         ResolveReq { playerid, resolution } ->
             case checkPlayerid state message playerid ResolutionPhase of
                 Err err ->
@@ -307,37 +308,9 @@ processServerMessage state message =
                               }
                     )
         _ ->
-            let res = ( state
-                      , errorRsp message IllegalRequestErr "Illegal Request"
-                      )
-            in
-                case message of
-                    RawMessage type_ msg params ->
-                        if state.placeOnly && (type_ == "req") && (msg == "place")
-                        then
-                            -- A PlaceReq with a bad place marks the end
-                            -- of placeOnly mode.
-                            case Types.get "playerid" params of
-                                Nothing ->
-                                    res
-                                Just playerid ->
-                                    case checkOnlyPlayerid state message playerid of
-                                        Err err ->
-                                            (state, err)
-                                        Ok (gameState, number) ->
-                                            leavePlaceOnly state gameState
-                        else
-                            res
-                    _ ->
-                        res
-
-leavePlaceOnly : ServerState -> GameState -> (ServerState, Message)
-leavePlaceOnly state gameState =
-    ( state
-    , PlacedRsp { gameid = gameState.gameid
-                , placements = []
-                }
-    )
+            ( state
+            , errorRsp message IllegalRequestErr "Illegal Request"
+            )
 
 updateGameState : ServerState -> (GameState, Message) -> (ServerState, Message)
 updateGameState state (gameState, message) =
@@ -396,13 +369,13 @@ joinReq state gameState message gameid name =
               }
     in
         -- The non-proxy server will generate a new playerid
-        ( st2, msg )
+        (st2, msg)
 
-placeReq : GameState -> Message -> Move -> Int -> (GameState, Message)
-placeReq state message placement number =
+placeReq : GameState -> Bool -> Message -> Move -> Int -> (GameState, Message)
+placeReq state placeOnly message placement number =
     let placements = Dict.insert number placement state.placements
+        done = placeOnly || (state.players == Dict.size placements)
         placeRsp = PlaceRsp { gameid = state.gameid, number = number }
-        done = (state.players == Dict.size placements)
         placementsList = if done then
                              List.map Tuple.second <| Dict.toList placements
                          else
@@ -410,7 +383,7 @@ placeReq state message placement number =
     in
         case placement of
             Placement _ _ ->
-                if isLegalMove placement state.board then
+                if placeOnly || (isLegalMove placement state.board) then
                     let plcmnts = if done then
                                       Dict.empty
                                   else
@@ -447,7 +420,9 @@ placeReq state message placement number =
                                           history
                               else
                                   state.history
-                        history = if done && (phase == PlacementPhase) then
+                        history = if done &&
+                                     (placeOnly || (phase == PlacementPhase))
+                                  then
                                       (newTurn turn resolver) ::his
                                   else
                                       his
