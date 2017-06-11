@@ -118,6 +118,21 @@ send : ServerInterface msg -> Message -> Cmd msg
 send interface message =
     Interface.send interface (log "send" message)
 
+initialPlayerName : Int -> Model -> String
+initialPlayerName number model =
+    if (if number == 1 then model.newIsLocal else model.isLocal) then
+        let names = String.split "," model.name
+        in
+            case LE.getAt (number-1) names of
+                Nothing -> "Player " ++ (toString number)
+                Just n ->
+                    if n == "" then
+                        "Player " ++ (toString number)
+                    else
+                        n
+    else
+        model.name
+
 init : ( Model, Cmd Msg )
 init =
     let getString = Http.send ReceiveServerUrl
@@ -192,12 +207,12 @@ update msg model =
                       , serverUrl = model.serverUrl
                       , gameid = ""
                       , newGameid = ""
-              }
-            , send server
-                <| NewReq { players = players
-                          , name = model.name
-                          }
-            )
+                  }
+                , send server
+                    <| NewReq { players = players
+                              , name = initialPlayerName 1 model
+                              }
+                )
         JoinGame ->
             let isLocal = model.newIsLocal
                 server = if isLocal then
@@ -356,7 +371,9 @@ serverResponse mod server message =
                   }
                 , if model.isLocal then
                       send server
-                          <| JoinReq { gameid = gameid, name = "bill" }
+                          <| JoinReq { gameid = gameid
+                                     , name = initialPlayerName 2 model
+                                     }
                   else
                       Cmd.none
                 )
@@ -364,7 +381,10 @@ serverResponse mod server message =
                 let done = number >= players
                     cmd = if (not done) && model.isLocal then
                               send server
-                                  <| JoinReq { gameid = gameid, name = "bill" }
+                                  <| JoinReq { gameid = gameid
+                                             , name = initialPlayerName
+                                                      (number+1) model
+                                             }
                           else
                               Cmd.none
                     playerNames = (number, name) :: model.playerNames
@@ -894,10 +914,14 @@ renderGamePage model =
                        <| SetIsLocal True
                    , radio "local" "remote" (not model.newIsLocal) nostart
                        <| SetIsLocal False
-                   , b [text " Name: " ]
+                   , b [ text <| if model.newIsLocal then
+                                     " Names: "
+                                 else
+                                     " Name: "
+                       ]
                    , input [ type_ "text"
                            , onInput <| SetName
-                           , disabled (model.newIsLocal || nostart)
+                           , disabled nostart
                            , size 30
                            , value model.name
                            ]
