@@ -35,6 +35,7 @@ type Msg
     | SetName String
     | SetGameid String
     | SetServerUrl String
+    | SetPlaceOnly Bool
     | NewGame
     | JoinGame
     | ResignGame
@@ -277,6 +278,7 @@ type alias ServerState =
     { playerInfoDict : Dict String PlayerInfo --playerid -> PlayerInfo
     , playeridDict : Dict String (List String) -- gameid -> List playerid
     , gameDict : Dict String GameState --gameid -> GameState
+    , placeOnly : Bool
     }
 
 type alias GameState =
@@ -299,5 +301,6 @@ type ServerInterface msg
       , wrapper : ServerInterface msg -> Message -> msg
       , state : Maybe ServerState
       , sender : ServerInterface msg -> Message -> Cmd msg
+      , placeOnly : Bool
       }
 

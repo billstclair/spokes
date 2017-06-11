@@ -16,7 +16,8 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , DisplayList, emptyDisplayList
                                       , StonePile, Color(..)
                                       , Turn, History, newTurn
-                                      , ServerPhase(..), ServerInterface, Message(..)
+                                      , ServerPhase(..), ServerInterface(..)
+                                      , Message(..)
                                       , GameOverReason(..)
                                       , movedStoneString, butLast, adjoin
                                       )
@@ -36,7 +37,7 @@ import Html.Attributes exposing ( value, size, maxlength, href, src, title
                                 , placeholder, disabled, target
                                 , width, height, class
                                 )
-import Html.Events exposing ( onClick, onInput, onFocus )
+import Html.Events exposing ( onClick, onInput, onFocus, onCheck )
 import Array exposing ( Array )
 import Char
 import List.Extra as LE
@@ -72,6 +73,7 @@ type alias Model =
     , selectedPile : Maybe StonePile
     , server : ServerInterface Msg
     , gameid : String
+    , placeOnly : Bool
     , playerNumber : Int
     , playerid : String
     , serverUrl : String
@@ -80,6 +82,10 @@ type alias Model =
     , name : String
     , newGameid : String
     }
+
+placeOnly : Model -> Bool
+placeOnly model =
+    model.isLocal && model.placeOnly
 
 initialInputs : Array String
 initialInputs = Array.repeat 4 ""
@@ -105,6 +111,7 @@ initialModel =
     , selectedPile = Nothing
     , server = makeProxyServer ServerResponse
     , gameid = ""
+    , placeOnly = False
     , playerNumber = 1
     , playerid = ""
     , serverUrl = "ws://localhost:8080"
@@ -114,9 +121,16 @@ initialModel =
     , newGameid = ""
     }
 
-send : ServerInterface msg -> Message -> Cmd msg
-send interface message =
-    Interface.send interface (log "send" message)
+send : Model -> ServerInterface msg -> Message -> Cmd msg
+send model interface message =
+    let si = if placeOnly model then
+                 case interface of
+                     ServerInterface sin ->
+                         ServerInterface { sin | placeOnly = True }
+             else
+                 interface
+    in
+        Interface.send si (log "send" message)
 
 initialPlayerName : Int -> Model -> String
 initialPlayerName number model =
@@ -144,7 +158,7 @@ init =
         , if initialModel.isLocal then
               Cmd.batch
                   [ getString
-                  , send initialModel.server
+                  , send initialModel initialModel.server
                       <| NewReq { players = initialModel.players
                                 , name = initialModel.name
                                 }
@@ -191,6 +205,10 @@ update msg model =
             ( { model | serverUrl = url }
             , Cmd.none
             )
+        SetPlaceOnly placeOnly ->
+            ( { model | placeOnly = placeOnly }
+            , Cmd.none
+            )
         NewGame ->
             let isLocal = model.newIsLocal
                 server = if isLocal then
@@ -210,7 +228,7 @@ update msg model =
                       , gameid = ""
                       , newGameid = ""
                   }
-                , send server
+                , send model server
                     <| NewReq { players = players
                               , name = initialPlayerName 1 model
                               }
@@ -237,7 +255,7 @@ update msg model =
                           , newGameid = gameid
                           , serverUrl = model.serverUrl
                       }
-                    , send server
+                    , send model server
                         <| JoinReq { gameid = gameid
                                    , name = model.name
                                    }
@@ -253,7 +271,7 @@ update msg model =
                                       :: model.resignedPlayers
                   , newGameid = ""
               }
-            , send model.server
+            , send model model.server
                 <| ResignReq { playerid = if model.isLocal then
                                               "1"
                                           else
@@ -278,7 +296,7 @@ update msg model =
             case getPlacements model of
                 Just (move :: _) ->
                     ( { model | placement = Just move }
-                    , send model.server
+                    , send model model.server
                         <| PlaceReq { playerid = if model.isLocal then
                                                      "1"
                                                  else
@@ -372,7 +390,7 @@ serverResponse mod server message =
                       , playerNames = [(1, name)]
                   }
                 , if model.isLocal then
-                      send server
+                      send model server
                           <| JoinReq { gameid = gameid
                                      , name = initialPlayerName 2 model
                                      }
@@ -382,7 +400,7 @@ serverResponse mod server message =
             JoinRsp { gameid, players, name, playerid, number } ->
                 let done = number >= players
                     cmd = if (not done) && model.isLocal then
-                              send server
+                              send model server
                                   <| JoinReq { gameid = gameid
                                              , name = initialPlayerName
                                                       (number+1) model
@@ -441,7 +459,7 @@ serverResponse mod server message =
                                         (model, Cmd.none)
                                     Just placement ->
                                         ( model
-                                        , send model.server
+                                        , send model model.server
                                             <| PlaceReq { playerid =
                                                               toString (number +1)
                                                         , placement = placement
@@ -502,7 +520,7 @@ serverResponse mod server message =
                           | resignedPlayers = adjoin number model.resignedPlayers
                       }
                     , if model.isLocal then
-                          send model.server
+                          send model model.server
                               <| ResignReq { playerid = toString (number+1) }
                       else
                           Cmd.none
@@ -637,7 +655,7 @@ undoMove model =
                                             (model, cmd)
                             _ ->
                                 ( model
-                                , send model.server
+                                , send model model.server
                                     <| UndoReq { playerid = model.playerid
                                                , message =
                                                    PlacedRsp
@@ -648,7 +666,7 @@ undoMove model =
                                 )
                     resolution :: _ ->
                         ( model
-                        , send model.server
+                        , send model model.server
                             <| UndoReq { playerid = model.playerid
                                        , message =
                                            ResolveRsp { gameid = model.gameid
@@ -695,7 +713,7 @@ maybeMakeMove nodeName pile model =
             ( model, Cmd.none )
         Just move ->
             ( model
-            , send model.server
+            , send model model.server
                 <| ResolveReq { playerid = model.playerid
                               , resolution = move
                               }
@@ -929,7 +947,15 @@ renderGamePage model =
                            ]
                          []
                    , if model.newIsLocal then
-                         text ""
+                         span []
+                             [ br
+                             , input [ type_ "checkbox"
+                                     , onCheck SetPlaceOnly
+                                     , checked model.placeOnly
+                                     ]
+                                 []
+                             , text " Place Only"
+                             ]
                      else
                          span []
                              [ br

@@ -41,6 +41,7 @@ emptyServerState =
     { playerInfoDict = Dict.empty
     , playeridDict = Dict.empty
     , gameDict = Dict.empty
+    , placeOnly = False
     }
 
 dummyGameid : String
@@ -68,6 +69,7 @@ makeProxyServer wrapper =
                     , wrapper = wrapper
                     , state = Nothing
                     , sender = proxySender
+                    , placeOnly = False
                     }
 
 makeServer : String -> msg -> ServerInterface msg
@@ -76,6 +78,7 @@ makeServer server msg =
                     , wrapper = (\_ _ -> msg)
                     , state = Nothing
                     , sender = sender
+                    , placeOnly = False
                     }
 
 getServer : ServerInterface msg -> String
@@ -96,7 +99,9 @@ proxyCmd ((ServerInterface interface) as si) message =
 proxySender : ServerInterface msg -> Message -> Cmd msg
 proxySender (ServerInterface interface) message =
     let state = Maybe.withDefault emptyServerState interface.state
-        (s2, msgs) = processServerMessage state message
+        (s2, msgs) = processServerMessage
+                     { state | placeOnly = interface.placeOnly }
+                     message
     in
         proxyCmd (ServerInterface { interface | state = Just s2 }) msgs
 
@@ -210,9 +215,14 @@ processServerMessage state message =
                 Ok gameState ->
                     joinReq state gameState message gameid name
         PlaceReq { playerid, placement } ->
-            case checkPlayerid state message playerid PlacementPhase of
+            case (if state.placeOnly then
+                      checkOnlyPlayerid state message playerid
+                  else
+                      checkPlayerid state message playerid PlacementPhase
+                 )
+            of
                 Err err ->
-                    (state, err)
+                        (state, err)
                 Ok (gameState, number) ->
                     updateGameState state
                         <| placeReq gameState message placement number
@@ -297,9 +307,37 @@ processServerMessage state message =
                               }
                     )
         _ ->
-            ( state
-            , errorRsp message IllegalRequestErr "Illegal Request"
-            )
+            let res = ( state
+                      , errorRsp message IllegalRequestErr "Illegal Request"
+                      )
+            in
+                case message of
+                    RawMessage type_ msg params ->
+                        if state.placeOnly && (type_ == "req") && (msg == "place")
+                        then
+                            -- A PlaceReq with a bad place marks the end
+                            -- of placeOnly mode.
+                            case Types.get "playerid" params of
+                                Nothing ->
+                                    res
+                                Just playerid ->
+                                    case checkOnlyPlayerid state message playerid of
+                                        Err err ->
+                                            (state, err)
+                                        Ok (gameState, number) ->
+                                            leavePlaceOnly state gameState
+                        else
+                            res
+                    _ ->
+                        res
+
+leavePlaceOnly : ServerState -> GameState -> (ServerState, Message)
+leavePlaceOnly state gameState =
+    ( state
+    , PlacedRsp { gameid = gameState.gameid
+                , placements = []
+                }
+    )
 
 updateGameState : ServerState -> (GameState, Message) -> (ServerState, Message)
 updateGameState state (gameState, message) =
