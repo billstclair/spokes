@@ -30,7 +30,10 @@ type Page
     | HelpPage
 
 type Msg
-    = SetPlayers Int
+    = SetChatInput String
+    | SendChat
+    | ChatKeydown Int
+    | SetPlayers Int
     | SetIsLocal Bool
     | SetName String
     | SetGameid String

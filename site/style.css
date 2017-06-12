@@ -1,3 +1,8 @@
+.chat {
+    width: 50em;
+    height: 6em;
+    overflow-y: scroll;
+}
 .resigned {
     text-decoration: line-through;
     color: darkgray;

@@ -31,18 +31,23 @@ import Spokes.Server.Interface as Interface exposing ( makeProxyServer, makeServ
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
                      , input, table, tr, th, td, button
+                     , textarea
                      )
 import Html.Attributes exposing ( value, size, maxlength, href, src, title
                                 , alt, style, selected, type_, name, checked
                                 , placeholder, disabled, target
                                 , width, height, class
+                                , readonly, id
                                 )
-import Html.Events exposing ( onClick, onInput, onFocus, onCheck )
+import Html.Events exposing ( onClick, onInput, onFocus, onCheck, on, keyCode )
 import Array exposing ( Array )
 import Char
 import List.Extra as LE
 import WebSocket
 import Http
+import Json.Decode as Json
+import Dom.Scroll exposing ( toBottom )
+import Task
 import Debug exposing ( log )
 
 main =
@@ -81,6 +86,8 @@ type alias Model =
     , newIsLocal : Bool
     , name : String
     , newGameid : String
+    , chat : String
+    , chatInput : String
     }
 
 placeOnly : Model -> Bool
@@ -119,6 +126,8 @@ initialModel =
     , newIsLocal = False
     , name = "Player 1"
     , newGameid = ""
+    , chat = ""
+    , chatInput = ""
     }
 
 send : Model -> ServerInterface msg -> Message -> Cmd msg
@@ -176,6 +185,31 @@ update msg model =
             ( model
             , Cmd.none
             )
+        SetChatInput text ->
+            ( { model | chatInput = text }
+            , Cmd.none
+            )
+        SendChat ->
+            let text = log "SendChat" <| String.trim model.chatInput
+            in
+                if text == "" then
+                    ( model
+                    , Cmd.none
+                    )
+                else
+                    ( { model | chatInput = "" }
+                    , send model model.server
+                        <| ChatReq { playerid = model.playerid
+                                   , text = text
+                                   }
+                    )
+        ChatKeydown keycode ->
+            if keycode == 13 then
+                update SendChat model
+            else
+                ( model
+                , Cmd.none
+                )
         SetPage page ->
             ( { model | page = page }
             , Cmd.none
@@ -400,6 +434,16 @@ serverResponse mod server message =
     let model = { mod | server = server }
     in
         case log "message" message of
+            ChatRsp { text, number } ->
+                let name = getPlayerName number "Player " model
+                    chat = if model.chat == "" then
+                               model.chat
+                           else
+                               model.chat ++ "\n"
+                in
+                    ( { model | chat = chat ++ name ++ ": " ++ text }
+                    , Task.attempt (\_ -> Noop) <| toBottom "chat"
+                    )
             NewRsp { gameid, playerid, name } ->
                 ( { model
                       | gameid = gameid
@@ -917,6 +961,10 @@ isPlaying : Model -> Bool
 isPlaying model =
     List.member model.phase [JoinPhase, PlacementPhase, ResolutionPhase]
 
+onKeydown : (Int -> msg) -> Attribute msg
+onKeydown tagger =
+  on "keydown" (Json.map tagger keyCode)
+
 renderGamePage : Model -> Html Msg
 renderGamePage model =
     let nostart = isPlaying model
@@ -960,6 +1008,27 @@ renderGamePage model =
                       Board.render
                       model.selectedPile model.displayList ri
                 ]
+            , if model.newIsLocal then
+                  text ""
+              else
+                  p []
+                      [ textarea [ id "chat"
+                                 , class "chat"
+                                 , readonly True
+                                 ]
+                            -- TODO: make player names bold.
+                            [ text model.chat ]
+                      , br
+                      , input [ type_ "text"
+                              , onInput SetChatInput
+                              , onKeydown ChatKeydown
+                              , size 50
+                              , value model.chatInput
+                              ]
+                            []
+                      , button [ onClick SendChat ]
+                          [ text "Send" ]
+                      ]
             , p [] [ b [ text "Players: " ]
                    , radio "players" "2 " (model.newPlayers == 2) nostart
                        <| SetPlayers 2
@@ -979,7 +1048,7 @@ renderGamePage model =
                                      " Name: "
                        ]
                    , input [ type_ "text"
-                           , onInput <| SetName
+                           , onInput SetName
                            , disabled nostart
                            , size 30
                            , value model.name
