@@ -1026,6 +1026,7 @@ renderGamePage model =
                               , value model.chatInput
                               ]
                             []
+                      , text " "
                       , button [ onClick SendChat ]
                           [ text "Send" ]
                       ]
