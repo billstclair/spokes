@@ -46,7 +46,7 @@ import List.Extra as LE
 import WebSocket
 import Http
 import Json.Decode as Json
-import Dom.Scroll exposing ( toBottom )
+import Dom.Scroll as Scroll
 import Task
 import Debug exposing ( log )
 
@@ -88,6 +88,7 @@ type alias Model =
     , newGameid : String
     , chat : String
     , chatInput : String
+    , chatScroll : Float
     }
 
 placeOnly : Model -> Bool
@@ -128,6 +129,7 @@ initialModel =
     , newGameid = ""
     , chat = ""
     , chatInput = ""
+    , chatScroll = -1000
     }
 
 send : Model -> ServerInterface msg -> Message -> Cmd msg
@@ -210,6 +212,18 @@ update msg model =
                 ( model
                 , Cmd.none
                 )
+        ChatScroll scroll ->
+            let s = scroll-1
+            in
+                if s >= model.chatScroll then
+                    ( { model | chatScroll = s }
+                    , Task.attempt (\_ -> Noop)
+                        <| Scroll.toBottom "chat"
+                    )
+                else
+                    ( model
+                    , Cmd.none
+                    )                    
         SetPage page ->
             ( { model | page = page }
             , Cmd.none
@@ -442,7 +456,12 @@ serverResponse mod server message =
                                model.chat ++ "\n"
                 in
                     ( { model | chat = chat ++ name ++ ": " ++ text }
-                    , Task.attempt (\_ -> Noop) <| toBottom "chat"
+                    , Task.attempt (\res ->
+                                        case res of
+                                            Ok scroll -> ChatScroll scroll
+                                            Err _ -> Noop
+                                   )
+                         <| Scroll.y "chat"
                     )
             NewRsp { gameid, playerid, name } ->
                 ( { model
@@ -1011,25 +1030,7 @@ renderGamePage model =
             , if model.newIsLocal then
                   text ""
               else
-                  p []
-                      [ textarea [ id "chat"
-                                 , class "chat"
-                                 , readonly True
-                                 ]
-                            -- TODO: make player names bold.
-                            [ text model.chat ]
-                      , br
-                      , input [ type_ "text"
-                              , onInput SetChatInput
-                              , onKeydown ChatKeydown
-                              , size 50
-                              , value model.chatInput
-                              ]
-                            []
-                      , text " "
-                      , button [ onClick SendChat ]
-                          [ text "Send" ]
-                      ]
+                  chatParagraph model .chat
             , p [] [ b [ text "Players: " ]
                    , radio "players" "2 " (model.newPlayers == 2) nostart
                        <| SetPlayers 2
@@ -1103,9 +1104,40 @@ renderGamePage model =
                    ]
             ]
 
+chatParagraph : Model -> (Model -> String) -> Html Msg
+chatParagraph model accessor =
+    p []
+        [ textarea [ id "chat"
+                   , class "chat"
+                   , readonly True
+                   ]
+              -- TODO: make player names bold.
+              [ text <| accessor model ]
+        , br
+        , input [ type_ "text"
+                , onInput SetChatInput
+                , onKeydown ChatKeydown
+                , size 50
+                , value model.chatInput
+                ]
+              []
+        , text " "
+        , button [ onClick SendChat ]
+            [ text "Send" ]
+        ]
+
+renderPublicPage : Model -> Html Msg
+renderPublicPage model =
+    div []
+        [ playButton
+        , text "Public page coming soon."
+        , playButton
+        ]
+
 pages : List (Page, String)
 pages =
     [ ( HelpPage, "Help" )
+    , ( PublicPage, "Public")
     , ( RulesPage, "Rules" )
     ]
 
@@ -1136,6 +1168,8 @@ view model =
         , case model.page of
               GamePage ->
                   renderGamePage model
+              PublicPage ->
+                  renderPublicPage model
               RulesPage ->
                   renderRulesPage
               HelpPage ->

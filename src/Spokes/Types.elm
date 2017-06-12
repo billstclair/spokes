@@ -26,6 +26,7 @@ import Http
 
 type Page
     = GamePage
+    | PublicPage
     | RulesPage
     | HelpPage
 
@@ -33,6 +34,7 @@ type Msg
     = SetChatInput String
     | SendChat
     | ChatKeydown Int
+    | ChatScroll Float
     | SetPlayers Int
     | SetIsLocal Bool
     | SetName String
