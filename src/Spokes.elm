@@ -626,6 +626,11 @@ serverResponse mod server message =
                                         <| PlacedRsp { gameid = gameid
                                                      , placements = moves
                                                      }
+                                HomeCircleFullReason _ moves ->
+                                    serverResponse model server
+                                        <| PlacedRsp { gameid = gameid
+                                                     , placements = moves
+                                                     }
                                 _ ->
                                     (model, Cmd.none)
                     in
@@ -926,7 +931,7 @@ gameOverReasonText model reason =
                 (pname player) ++ " resigned."
             UnresolvableReason _ ->
                 "Unresolvable."
-            HomeCircleFullReason player ->
+            HomeCircleFullReason player _ ->
                 (pname player) ++ "'s home circle is full."
             TimeoutReason ->
                 "The server timed out."

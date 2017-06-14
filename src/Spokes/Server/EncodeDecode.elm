@@ -163,27 +163,37 @@ stringToGameOverReason string number placements =
                         Ok i -> ResignationReason i
         "unresolvable" ->
             case placements of
-                Nothing -> UnknownReason string
+                Nothing ->
+                    UnknownReason string
                 Just moves ->
                     UnresolvableReason moves
         "homecirclefull" ->
             case number of
                 Nothing -> UnknownReason string
                 Just n ->
-                    case String.toInt n of
-                        Err _ -> UnknownReason string
-                        Ok i -> HomeCircleFullReason i
+                    case placements of
+                        Nothing ->
+                            UnknownReason string
+                        Just moves ->
+                            case String.toInt n of
+                                Err _ -> UnknownReason string
+                                Ok i -> HomeCircleFullReason i moves
         "timeout" -> TimeoutReason
         _ -> UnknownReason string
 
 gameOverReasonToString : GameOverReason -> (String, Maybe String, Maybe (List Move))
 gameOverReasonToString reason =
     case reason of
-        ResignationReason n -> ("resignation", Just (toString n), Nothing)
-        UnresolvableReason moves -> ("unresolvable", Nothing, Just moves)
-        HomeCircleFullReason n -> ("homecirclefull", Just (toString n), Nothing)
-        TimeoutReason -> ("timeout", Nothing, Nothing)
-        UnknownReason s -> (s, Nothing, Nothing)
+        ResignationReason n ->
+            ("resignation", Just (toString n), Nothing)
+        UnresolvableReason moves ->
+            ("unresolvable", Nothing, Just moves)
+        HomeCircleFullReason n moves ->
+            ("homecirclefull", Just (toString n), Just moves)
+        TimeoutReason ->
+            ("timeout", Nothing, Nothing)
+        UnknownReason s ->
+            (s, Nothing, Nothing)
 
 maybeGameOverReason : Maybe String -> Maybe String -> Maybe (List Move) -> Maybe GameOverReason
 maybeGameOverReason gos number placements =

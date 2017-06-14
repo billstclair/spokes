@@ -15,7 +15,7 @@ module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , isLegalMove, isLegalPlacement, makeMove, undoMove
                              , computeDisplayList, findResolution
                              , canResolve, boardToString, makePlacements
-                             , isHomeCircleFull
+                             , isHomeCircleFull, findFullHomeCircle
                              )
 
 import Spokes.Types as Types exposing ( Msg(..), Board, Node
@@ -1574,6 +1574,24 @@ playerHomeSpokes player players =
             Just circleDict ->
                 Dict.get "" circleDict
 
+findFullHomeCircle : Board -> RenderInfo -> Maybe Int
+findFullHomeCircle board info =
+    case info.players of
+        Nothing ->
+            Nothing
+        Just players ->
+            let loop = (\player ->
+                            if player == 0 then
+                                Nothing
+                            else
+                                if isHomeCircleFull player board info then
+                                    Just player
+                                else
+                                    loop (player-1)
+                       )
+            in
+                loop players
+
 isHomeCircleFull : Int -> Board -> RenderInfo -> Bool
 isHomeCircleFull player board info =
     case info.players of
@@ -1813,6 +1831,8 @@ canFillWithColorFromEnd board color first last direction =
                         in
                             -- If unequal, the other could be pulled away,
                             -- and a same-color stone pushed in from D circle.
+                            -- If equal, it may not be possible to push
+                            -- the equal stone towards the other player's circle.
                             -- Maybe fix later.
                             (color == otherColor, first)
                     _ ->

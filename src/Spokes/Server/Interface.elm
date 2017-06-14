@@ -26,7 +26,7 @@ import Spokes.Types as Types
              )
 import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
                              , getNode, isLegalMove, makeMove, undoMove
-                             , canResolve
+                             , canResolve, findFullHomeCircle
                              )
 
 
@@ -177,8 +177,10 @@ processServerMessage state message =
         -- Basic game play
         NewReq { players, name } ->
             if players == 2 || players == 4 then
-                let gameState = { emptyGameState
+                let info = emptyGameState.renderInfo
+                    gameState = { emptyGameState
                                     | players = players
+                                    , renderInfo = { info | players = Just players }
                                     , resolver = 2 --auto-join
                                 }
                     gameid = gameState.gameid
@@ -426,9 +428,25 @@ placeReq state placeOnly message placement number =
                                       (newTurn turn resolver) ::his
                                   else
                                       his
-                        gameOver = done &&
-                                   (not <| canResolve
-                                        board renderInfo (Just unresolvedPiles))
+                        (gameOver, reason) =
+                            if not done then
+                                (False, TimeoutReason)
+                            else if unresolvedPiles == [] then
+                                case findFullHomeCircle board renderInfo of
+                                    Nothing ->
+                                        (False, TimeoutReason)
+                                    Just player ->
+                                        (True
+                                        , HomeCircleFullReason
+                                            player placementsList
+                                        )
+                            else
+                                if canResolve
+                                    board renderInfo (Just unresolvedPiles)
+                                then
+                                    (False, TimeoutReason)
+                                else
+                                    (True, UnresolvableReason placementsList)
                     in
                         ( { state
                               | placements = plcmnts
@@ -442,8 +460,7 @@ placeReq state placeOnly message placement number =
                         , if done then
                               if gameOver then
                                   GameOverRsp { gameid = state.gameid
-                                              , reason =
-                                                  UnresolvableReason placementsList
+                                              , reason = reason
                                               }
                               else
                                   PlacedRsp { gameid = state.gameid
