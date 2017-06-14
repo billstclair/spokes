@@ -1588,8 +1588,26 @@ isHomeCircleFull player board info =
 
 areSpokesFull : Board -> List Int -> Bool
 areSpokesFull board spokes =
-    (areSpokesFullFromD board spokes) &&
-        (areSpokesFullFromEnds board spokes)
+    (areAllHomeSpokesOccupied board spokes) ||
+        ((areSpokesFullFromD board spokes) &&
+         (areSpokesFullFromEnds board spokes)
+        )
+
+isHomeSpokeEmpty : Board -> Int -> Bool
+isHomeSpokeEmpty board spoke =
+    case getNode (toString spoke) board of
+        Nothing ->
+            False
+        Just { whiteStones, blackStones } ->
+            (whiteStones == 0) && (blackStones == 0)
+
+areAllHomeSpokesOccupied : Board -> List Int -> Bool
+areAllHomeSpokesOccupied board spokes =
+    case LE.find (isHomeSpokeEmpty board) spokes of
+        Nothing ->
+            True
+        Just _ ->
+            False
 
 nodeCounts : Board -> String -> Maybe (Int, Int, Int)
 nodeCounts board nodeName =
@@ -1615,9 +1633,38 @@ canFillWith : Board -> Color -> String -> Int -> Bool
 canFillWith board color nodeName spoke =
     True
 
-canPushTo : Board -> String -> Int -> Bool
-canPushTo board nodeName spoke =
-    True
+hasLiveNonhomeNeighbor:  Board -> String -> List (String, NodeClassification) -> Bool
+hasLiveNonhomeNeighbor board homeNode classifications =
+    let loop = (\cs ->
+                    case cs of
+                        [] ->
+                            False
+                        (n, c) :: tail ->
+                            if (n /= homeNode) &&
+                                (c==Empty || c==WhiteOnly || c==BlackOnly)
+                            then
+                                True
+                            else
+                                loop tail
+               )
+    in
+        loop classifications    
+
+hasEmptyNonhomeNeighbor:  Board -> String -> List (String, NodeClassification) -> Bool
+hasEmptyNonhomeNeighbor board homeNode classifications =
+    let loop = (\cs ->
+                    case cs of
+                        [] ->
+                            False
+                        (n, c) :: tail ->
+                            if (n /= homeNode) && (c==Empty)
+                            then
+                                True
+                            else
+                                loop tail
+               )
+    in
+        loop classifications
 
 canFillSpokeFromD : Board -> Int -> Bool
 canFillSpokeFromD board spoke =
@@ -1626,11 +1673,19 @@ canFillSpokeFromD board spoke =
     in
         case t of
             0 ->
-                canPushTo board sp spoke
-            1 ->
-                let color = if b == 1 then White else Black
+                let dsp = "D" ++ sp
                 in
-                    canFillWith board color ("D" ++ sp) spoke
+                    case getNode dsp board of
+                        Just node ->
+                            let classifications = classifyNeighbors node board
+                                dt = node.blackStones + node.whiteStones
+                            in
+                                (dt==0 &&
+                                 hasLiveNonhomeNeighbor board sp classifications)
+                                || (dt==1 &&
+                                    hasEmptyNonhomeNeighbor board sp classifications)
+                        Nothing ->
+                            False
             _ ->
                 False
 
@@ -1642,25 +1697,26 @@ areSpokesFullFromD board spokes =
         Nothing ->
             True
 
-isSpokeFullFromEnd : Board -> Int -> Int -> Bool
-isSpokeFullFromEnd board spoke other =
-    False
-
 areSpokesFullFromEnds : Board -> List Int -> Bool
 areSpokesFullFromEnds board spokes =
     case List.head spokes of
         Nothing ->
             False               --can't happen
         Just first ->
-            let other = first-1
-            in
-                if not <| isSpokeFullFromEnd board first other then
-                    False
-                else
-                    case LE.last spokes of
-                        Nothing ->
-                            False --can't happen
-                        Just last ->
-                            let other = (last % 16) + 1
-                            in
-                                isSpokeFullFromEnd board last other
+            case LE.last spokes of
+                Nothing ->
+                    False --can't happen
+                Just last ->
+                    let beforeFirst = if first==1 then 16 else first-1
+                        afterLast = (last % 16) + 1
+                    in
+                        areSpokesFullFromEndsInternal
+                            board first last beforeFirst afterLast
+
+areSpokesFullFromEndsInternal : Board -> Int -> Int -> Int -> Int -> Bool
+areSpokesFullFromEndsInternal board first last beforeFirst afterLast =
+    False
+
+isSpokeFullFromEnd : Board -> Int -> Int -> Bool
+isSpokeFullFromEnd board spoke other =
+    False
