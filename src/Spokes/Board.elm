@@ -1495,8 +1495,8 @@ boardToString board =
     in
         String.concat list
 
-canResolve : Board -> RenderInfo -> Maybe (List StonePile) -> Bool
-canResolve board info unresolvedPiles =
+old_canResolve : Board -> RenderInfo -> Maybe (List StonePile) -> Bool
+old_canResolve board info unresolvedPiles =
     let tryBoard : Board -> Set String -> (Bool, Set String)
         tryBoard = (\b bs ->
                         let s = boardToString b
@@ -1548,6 +1548,79 @@ canResolve board info unresolvedPiles =
     in
         loop board piles (Set.singleton <| boardToString board)
             |> Tuple.first
+
+processUnresolved : Board -> RenderInfo -> List StonePile -> Set String -> Maybe (List (Board, List StonePile), Set String)
+processUnresolved board info piles boards =
+    let loop : List Move -> Set String -> List (Board, List StonePile) -> Maybe (List (Board, List StonePile), Set String)
+        loop = (\moves bs res ->
+                    case moves of
+                        [] ->
+                            Just (res, bs)
+                        move :: tail ->
+                            let b2 = makeMove move board
+                                s = boardToString b2
+                            in
+                                if Set.member s bs then
+                                    loop tail bs res
+                                else
+                                    let dl = computeDisplayList b2 info
+                                        bs2 = (Set.insert s bs)
+                                    in
+                                        case dl.unresolvedPiles of
+                                            [] ->
+                                                let b3 = log "resolved"
+                                                         <| liveNodes b2
+                                                in
+                                                    Nothing
+                                            ps ->
+                                                loop tail bs2
+                                                    <| (b2, ps) :: res
+               )
+    in
+        let moves = List.foldl (\p l -> List.append p.resolutions l) [] piles
+        in
+            loop moves boards []
+
+liveNodes : Board -> List (String, Int, Int)
+liveNodes board =
+    let accumulate = (\name node res ->
+                          let w = node.whiteStones
+                              b = node.blackStones
+                          in
+                              if 1 == (w + b) then
+                                  (name, w, b) :: res
+                              else
+                                  res
+                     )
+    in
+        Dict.foldl accumulate [] board
+
+canResolve : Board -> RenderInfo -> Maybe (List StonePile) -> Bool
+canResolve board info unresolvedPiles =
+    let piles = case unresolvedPiles of
+                    Just p ->
+                        p
+                    Nothing ->
+                        computeDisplayList board info
+                            |> .unresolvedPiles
+        loop : List (Board, List StonePile) -> Set String -> List (Board, List StonePile) -> Bool
+        loop = (\unresolved bs res ->
+                    case unresolved of
+                        [] ->
+                            if List.isEmpty res then
+                                False
+                            else
+                                loop res bs []
+                        (b, ps) :: tail ->
+                            case processUnresolved b info ps bs of
+                                Nothing ->
+                                    True
+                                Just (unr, bs2) ->
+                                    loop tail bs2
+                                        <| List.append unr res
+               )
+    in
+        loop [(board, piles)] Set.empty []
 
 makePlacements : Board -> List String -> Board
 makePlacements board placements =
