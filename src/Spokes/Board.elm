@@ -1666,28 +1666,41 @@ hasEmptyNonhomeNeighbor board homeNode classifications =
     in
         loop classifications
 
+canPushDToHomeCircle : Board -> String -> Bool
+canPushDToHomeCircle board spoke =
+    let dsp = "D" ++ spoke
+    in
+        case getNode dsp board of
+            Just node ->
+                let classifications = classifyNeighbors node board
+                    dt = node.blackStones + node.whiteStones
+                in
+                    (dt==0 &&
+                         hasLiveNonhomeNeighbor
+                         board spoke classifications)
+                    ||
+                    (dt==1 &&
+                         hasEmptyNonhomeNeighbor
+                         board spoke classifications)
+            Nothing ->
+                False
+
+isNodeEmpty : Board -> String -> Bool
+isNodeEmpty board nodeName =
+    case getNode nodeName board of
+        Nothing ->
+            False
+        Just node ->
+            0 == (node.whiteStones + node.blackStones)
+
 canFillSpokeFromD : Board -> Int -> Bool
 canFillSpokeFromD board spoke =
     let sp = toString spoke
-        (b, w, t) = fullNodeCounts board sp
     in
-        case t of
-            0 ->
-                let dsp = "D" ++ sp
-                in
-                    case getNode dsp board of
-                        Just node ->
-                            let classifications = classifyNeighbors node board
-                                dt = node.blackStones + node.whiteStones
-                            in
-                                (dt==0 &&
-                                 hasLiveNonhomeNeighbor board sp classifications)
-                                || (dt==1 &&
-                                    hasEmptyNonhomeNeighbor board sp classifications)
-                        Nothing ->
-                            False
-            _ ->
-                False
+        if isNodeEmpty board sp then
+            canPushDToHomeCircle board sp
+        else
+            False
 
 areSpokesFullFromD : Board -> List Int -> Bool
 areSpokesFullFromD board spokes =
@@ -1697,6 +1710,16 @@ areSpokesFullFromD board spokes =
         Nothing ->
             True
 
+nextHomeSpoke : Int -> Int -> Int
+nextHomeSpoke spoke direction =
+    if direction > 0 then
+        (spoke % 16) + 1
+    else
+        if spoke == 1 then
+            16
+        else
+            spoke - 1
+        
 areSpokesFullFromEnds : Board -> List Int -> Bool
 areSpokesFullFromEnds board spokes =
     case List.head spokes of
@@ -1707,16 +1730,90 @@ areSpokesFullFromEnds board spokes =
                 Nothing ->
                     False --can't happen
                 Just last ->
-                    let beforeFirst = if first==1 then 16 else first-1
-                        afterLast = (last % 16) + 1
+                    let beforeFirst = nextHomeSpoke first (-1)
+                        afterLast = nextHomeSpoke last 1
+                        (isFull, lastLooked) =
+                            isSpokeFullFromEnd board first beforeFirst afterLast (-1)
                     in
-                        areSpokesFullFromEndsInternal
-                            board first last beforeFirst afterLast
+                        if isFull && (lastLooked /= afterLast) then
+                            let (res, _) =
+                                isSpokeFullFromEnd board last afterLast beforeFirst 1
+                            in
+                                res
+                        else
+                            False
+                                
+isSpokeFullFromEnd : Board -> Int -> Int -> Int -> Int -> (Bool, Int)
+isSpokeFullFromEnd board first afterFirst last direction =
+    if not <| isNodeEmpty board (toString first) then
+        (True, first)
+    else
+        let (notres, lastLooked) = canFillFromEnd board afterFirst last direction
+        in
+            (not notres, lastLooked)
 
-areSpokesFullFromEndsInternal : Board -> Int -> Int -> Int -> Int -> Bool
-areSpokesFullFromEndsInternal board first last beforeFirst afterLast =
-    False
-
-isSpokeFullFromEnd : Board -> Int -> Int -> Bool
-isSpokeFullFromEnd board spoke other =
-    False
+canFillFromEnd : Board -> Int -> Int -> Int -> (Bool, Int)
+canFillFromEnd board first last direction =
+    let sp = toString first
+    in
+        case getNode sp board of
+            Nothing ->
+                (False, first) --can't happen
+            Just node ->
+                case node.whiteStones + node.blackStones of
+                    0 ->
+                        if canPushDToHomeCircle board sp then
+                            (True, first)
+                        else if first == last then
+                            (False, first)
+                        else
+                            canFillFromEnd
+                                board (nextHomeSpoke first direction) last direction
+                    1 ->
+                        if first == last then
+                            (False, first)
+                        else
+                            canFillWithColorFromEnd
+                                board (if node.whiteStones == 1 then
+                                           White
+                                       else
+                                           Black
+                                      )
+                                (nextHomeSpoke first direction)
+                                last direction
+                    _ ->
+                        (False, first)
+                            
+            
+canFillWithColorFromEnd : Board -> Color -> Int -> Int -> Int -> (Bool, Int)
+canFillWithColorFromEnd board color first last direction =
+    let sp = toString first
+    in
+        case getNode sp board of
+            Nothing ->
+                (False, first) --can't happen
+            Just node ->
+                case node.whiteStones + node.blackStones of
+                    0 ->
+                        if canPushDToHomeCircle board sp then
+                            -- It might be the wrong color. Maybe fix later.
+                            (True, first)
+                        else if first == last then
+                            (False, first)
+                        else
+                            canFillWithColorFromEnd
+                                board color (nextHomeSpoke first direction)
+                                last direction
+                    1 ->
+                        let otherColor = (if node.whiteStones == 1 then
+                                              White
+                                          else
+                                              Black
+                                         )
+                        in
+                            -- If unequal, the other could be pulled away,
+                            -- and a same-color stone pushed in from D circle.
+                            -- Maybe fix later.
+                            (color == otherColor, first)
+                    _ ->
+                        (False, first)
