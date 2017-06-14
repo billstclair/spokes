@@ -553,7 +553,7 @@ resolveReq state message resolution =
                     )
         _ ->
             ( state
-            , errorRsp message IllegalRequestErr "Non-placement move"
+            , errorRsp message IllegalRequestErr "Non-resolution move"
             )
 
 undoReq : GameState -> Message -> (GameState, Message)

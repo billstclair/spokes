@@ -58,6 +58,7 @@ rawMessageToParams message =
     case message of
         RawMessage typ msg plist ->
             let placements = maybePlacements <| get "placements" plist
+                resolution = maybeResolution plist
             in
                 Just { req = if typ == "req" then Just msg else Nothing
                      , rsp = if typ == "rsp" then Just msg else Nothing
@@ -70,7 +71,7 @@ rawMessageToParams message =
                      , resolver = maybeInt <| get "resolver" plist
                      , placement = maybePlacement <| get "placement" plist
                      , placements = placements
-                     , resolution = maybeResolution plist
+                     , resolution = resolution
                      , message = maybeMessage <| get "message" plist
                      , request = get "request" plist
                      , id = maybeInt <| get "id" plist
@@ -79,6 +80,7 @@ rawMessageToParams message =
                             (get "reason" plist)
                             (get "reasonnumber" plist)
                             placements
+                            resolution
                  }
         _ ->
             Nothing
@@ -151,8 +153,8 @@ maybeMessage ms =
                 Ok m ->
                     Just m            
 
-stringToGameOverReason : String -> Maybe String -> Maybe (List Move) -> GameOverReason
-stringToGameOverReason string number placements =
+stringToGameOverReason : String -> Maybe String -> Maybe (List Move) -> Maybe Move -> GameOverReason
+stringToGameOverReason string number placements resolution =
     case string of
         "resignation" ->
             case number of
@@ -164,44 +166,71 @@ stringToGameOverReason string number placements =
         "unresolvable" ->
             case placements of
                 Nothing ->
-                    UnknownReason string
+                    case resolution of
+                        Nothing ->
+                            UnknownReason string
+                        Just move ->
+                            UnresolvableReason [move]
                 Just moves ->
                     UnresolvableReason moves
         "homecirclefull" ->
             case number of
-                Nothing -> UnknownReason string
+                Nothing ->
+                    UnknownReason string
                 Just n ->
-                    case placements of
-                        Nothing ->
+                    case String.toInt n of
+                        Err _ ->
                             UnknownReason string
-                        Just moves ->
-                            case String.toInt n of
-                                Err _ -> UnknownReason string
-                                Ok i -> HomeCircleFullReason i moves
+                        Ok i ->
+                            case placements of
+                                Nothing ->
+                                    case resolution of
+                                        Nothing ->
+                                            UnknownReason string
+                                        Just move ->
+                                            HomeCircleFullReason i [move]
+                                Just moves ->
+                                    HomeCircleFullReason i moves
         "timeout" -> TimeoutReason
         _ -> UnknownReason string
 
-gameOverReasonToString : GameOverReason -> (String, Maybe String, Maybe (List Move))
+movesToPlacementsOrResolution : List Move -> (Maybe (List Move), Maybe Move)
+movesToPlacementsOrResolution moves =
+    case moves of
+        [move] ->
+            case move of
+                Resolution _ _ _ ->
+                    (Nothing, Just move)
+                _ ->
+                    (Just moves, Nothing)
+        _ ->
+            (Just moves, Nothing)
+
+gameOverReasonToString : GameOverReason -> (String, Maybe String, Maybe (List Move), Maybe Move)
 gameOverReasonToString reason =
     case reason of
         ResignationReason n ->
-            ("resignation", Just (toString n), Nothing)
+            ("resignation", Just (toString n), Nothing, Nothing)
         UnresolvableReason moves ->
-            ("unresolvable", Nothing, Just moves)
+            let (placements, resolution) = movesToPlacementsOrResolution moves
+            in
+                ("unresolvable", Nothing, placements, resolution)
         HomeCircleFullReason n moves ->
-            ("homecirclefull", Just (toString n), Just moves)
+            let (placements, resolution) = movesToPlacementsOrResolution moves
+            in
+                ("homecirclefull", Just (toString n), placements, resolution)
         TimeoutReason ->
-            ("timeout", Nothing, Nothing)
+            ("timeout", Nothing, Nothing, Nothing)
         UnknownReason s ->
-            (s, Nothing, Nothing)
+            (s, Nothing, Nothing, Nothing)
 
-maybeGameOverReason : Maybe String -> Maybe String -> Maybe (List Move) -> Maybe GameOverReason
-maybeGameOverReason gos number placements =
+maybeGameOverReason : Maybe String -> Maybe String -> Maybe (List Move) -> Maybe Move -> Maybe GameOverReason
+maybeGameOverReason gos number placements resolution =
     case gos of
         Nothing ->
             Nothing
         Just s ->
-            Just <| stringToGameOverReason s number placements
+            Just <| stringToGameOverReason s number placements resolution
 
 decodeMessage : String -> Result String Message
 decodeMessage string =
@@ -566,24 +595,35 @@ messageEncoder message =
             messageValue "rsp" "resign" [ ("gameid", gameid)
                                         , ("number", toString number) ]
         GameOverRsp { gameid, reason } ->
-            let (s, number, placements) = gameOverReasonToString reason
-                params = case number of
+            let (s, number, placements, resolution) = gameOverReasonToString reason
+                params = case placements of
                              Nothing ->
-                                 case placements of
-                                     Nothing -> [ ("gameid", gameid)
-                                                , ("reason", s)
-                                                ]
-                                     Just moves ->
+                                 case resolution of
+                                     Nothing ->
                                          [ ("gameid", gameid)
                                          , ("reason", s)
-                                         , ("placements", placementsString moves)
                                          ]
-                             Just i -> [ ("gameid", gameid)
-                                       , ("reason", s)
-                                       , ("reasonnumber", i)
-                                       ]
+                                     Just move ->
+                                         let (color, from, to) =
+                                                 resolutionToStrings move
+                                         in
+                                             [ ("gameid", gameid)
+                                             , ("reason", s)
+                                             , ("color", color)
+                                             , ("from", from)
+                                             , ("to", to)
+                                             ]
+                             Just moves ->
+                                 [ ("gameid", gameid)
+                                 , ("reason", s)
+                                 , ("placements", placementsString moves)
+                                 ]
+                params2 = case number of
+                              Nothing ->
+                                  params
+                              Just i -> ("reasonnumber", i) :: params
             in
-                messageValue "rsp" "gameover" params
+                messageValue "rsp" "gameover" params2
         -- Errors
         UndoReq { playerid, message } ->
             messageValue "req" "undo" [ ("playerid", playerid)

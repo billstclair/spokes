@@ -88,7 +88,21 @@ protocolData =
                                                 , Placement Black "D3"
                                                 ]
                   }
-    , GameOverRsp { gameid = "asdf", reason = HomeCircleFullReason 1 }
+    , GameOverRsp { gameid = "asdf"
+                  , reason = UnresolvableReason [ Resolution MoveWhite "D1" "1" ]
+                  }
+    , GameOverRsp { gameid = "asdf"
+                  , reason = HomeCircleFullReason
+                             1
+                             [ Placement White "C2"
+                             , Placement Black "D4"
+                             ]
+                  }
+    , GameOverRsp { gameid = "asdf"
+                  , reason = HomeCircleFullReason
+                             1
+                             [ Resolution MoveBlack "D2" "2" ]
+                  }
     , GameOverRsp { gameid = "asdf", reason = TimeoutReason }
     , GameOverRsp { gameid = "asdf", reason = UnknownReason "unknown" }
     , UndoReq { playerid = "p1"
