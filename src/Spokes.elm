@@ -884,7 +884,7 @@ startLine : Model -> Html Msg
 startLine model =
     span []
         [ text "Click 'New Game' or 'Join Game' below to begin. "
-        , button [ disabled True ] [ text "Start" ]
+        , button [ onClick <| SetPage HelpPage ] [ text "Help" ]
         ]
 
 joinLine : Model -> Html Msg
