@@ -1016,22 +1016,22 @@ iframe url =
                 ]
         []
 
-renderIframePage : String -> String -> Html Msg
-renderIframePage title url =
+renderIframePage : Model -> String -> Html Msg
+renderIframePage model url =
     div []
-        [ h3 [] [ text title ]
+        [ pageLinks model.page
         , playButton
         , iframe url
         , playButton
         ]
 
-renderRulesPage : Html Msg
-renderRulesPage =
-    renderIframePage "Rules" "docs/rules.html"
+renderRulesPage : Model -> Html Msg
+renderRulesPage model =
+    renderIframePage model "docs/rules.html"
 
-renderHelpPage : Html Msg
-renderHelpPage =
-    renderIframePage "Help" "docs/help.html"
+renderHelpPage : Model -> Html Msg
+renderHelpPage model =
+    renderIframePage model "docs/help.html"
 
 isPlaying : Model -> Bool
 isPlaying model =
@@ -1186,7 +1186,8 @@ chatParagraph model accessor =
 renderPublicPage : Model -> Html Msg
 renderPublicPage model =
     div []
-        [ playButton
+        [ pageLinks model.page
+        , playButton
         , text "Public page coming soon."
         , playButton
         ]
@@ -1203,7 +1204,7 @@ pageLink currentPage (page, label) =
     span []
         [ text " "
         , if currentPage == page then
-              text label
+              span [ class "pagename" ] [ text label ]
           else
               a [ href "#", onClick <| SetPage page ]
                   [ text label ]
@@ -1228,9 +1229,9 @@ view model =
               PublicPage ->
                   renderPublicPage model
               RulesPage ->
-                  renderRulesPage
+                  renderRulesPage model
               HelpPage ->
-                  renderHelpPage
+                  renderHelpPage model
         , p [] [ pageLinks model.page
                , br
                , a [ href "https://gibgoygames.com/"

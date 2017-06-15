@@ -1,3 +1,6 @@
+.pagename {
+    font-weight: bold;
+}
 .chat {
     width: 50em;
     height: 6em;
