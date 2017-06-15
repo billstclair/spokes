@@ -48,6 +48,7 @@ import Http
 import Json.Decode as Json
 import Dom.Scroll as Scroll
 import Task
+import Set
 import Debug exposing ( log )
 
 main =
@@ -954,10 +955,45 @@ gameOverReasonText model reason =
             UnknownReason text ->
                 text
 
+unresignedPlayers : Model -> List Int
+unresignedPlayers model =
+    let all = Set.fromList <| List.range 1 model.players
+        resigned = Set.fromList model.resignedPlayers
+    in
+        Set.toList <| Set.diff all resigned        
+
+winner : Model -> String
+winner model =
+    let scores = List.map (\player ->
+                               (player, Board.count model.players player model.board)
+                          )
+                          <| unresignedPlayers model
+    in
+        case List.sortWith (\(p1, (a1, b1)) (p2, (a2, b2)) ->
+                             case compare a2 a1 of
+                                 EQ ->
+                                     case compare b2 b1 of
+                                         EQ ->
+                                             compare p2 p1
+                                         x ->
+                                             x
+                                 x ->
+                                     x
+                           )
+                           scores
+        of
+            (player, _) :: _ ->
+                getPlayerName player "Player " model
+            _ ->
+                "Nobody"
+
 gameOverLine : Model -> GameOverReason -> Html Msg
 gameOverLine model reason =
     span []
-        [ text <| "Game over. " ++ (gameOverReasonText model reason)
+        [ text <| "Game over. " ++ (gameOverReasonText model reason) ++ " "
+        , b [ text <| winner model
+            , text " wins!"
+            ]
         , text " "
         , button [ disabled True ] [ text "Game Over" ]
         ]
