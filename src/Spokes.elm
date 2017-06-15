@@ -619,20 +619,16 @@ serverResponse mod server message =
                 if gameid /= model.gameid then
                     ( model, Cmd.none )
                 else
-                    let (model2, _) =
+                    let model2 =
                             case reason of
                                 UnresolvableReason moves ->
-                                    serverResponse model server
-                                        <| PlacedRsp { gameid = gameid
-                                                     , placements = moves
-                                                     }
+                                    makeGameOverReasonMoves
+                                        model server gameid moves
                                 HomeCircleFullReason _ moves ->
-                                    serverResponse model server
-                                        <| PlacedRsp { gameid = gameid
-                                                     , placements = moves
-                                                     }
+                                    makeGameOverReasonMoves
+                                        model server gameid moves
                                 _ ->
-                                    (model, Cmd.none)
+                                    model
                     in
                         ( { model2
                               | resignedPlayers =
@@ -722,6 +718,26 @@ serverResponse mod server message =
                 ( model
                 , Cmd.none
                 )
+
+makeGameOverReasonMoves : Model -> ServerInterface Msg -> String -> List Move -> Model
+makeGameOverReasonMoves model server gameid moves =
+    let response = case moves of
+                       Placement _ _ :: _ ->
+                           PlacedRsp { gameid = gameid
+                                     , placements = moves
+                                     }
+                       resolution :: _ ->
+                           ResolveRsp { gameid = gameid
+                                      , resolution = resolution
+                                      }
+                       _ ->
+                           ChatRsp { gameid = gameid
+                                   , text = "Empty moves in game over response."
+                                   , number = 0
+                                   }
+        (model2, _) = serverResponse model server response
+    in
+        model2
 
 undoMove : Model -> (Model, Cmd Msg)
 undoMove model =

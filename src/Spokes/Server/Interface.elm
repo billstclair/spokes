@@ -373,11 +373,37 @@ joinReq state gameState message gameid name =
         -- The non-proxy server will generate a new playerid
         (st2, msg)
 
+maybeGameOver : Board -> RenderInfo -> String -> List Move -> List StonePile -> Message -> ServerPhase -> (Message, ServerPhase)
+maybeGameOver board renderInfo gameid moves unresolvedPiles response phase =
+    if unresolvedPiles == [] then
+        case findFullHomeCircle board renderInfo of
+            Nothing ->
+                (response, phase)
+            Just player ->
+                let reason = HomeCircleFullReason player moves
+                in
+                    ( GameOverRsp { gameid = gameid
+                                  , reason = reason
+                                  }
+                    , GameOverPhase reason
+                    )
+    else if canResolve board renderInfo (Just unresolvedPiles) then
+        (response, phase)
+    else
+        let reason = UnresolvableReason moves
+        in
+            ( GameOverRsp { gameid = gameid
+                          , reason = reason
+                          }
+            , GameOverPhase reason
+            )
+
 placeReq : GameState -> Bool -> Message -> Move -> Int -> (GameState, Message)
 placeReq state placeOnly message placement number =
     let placements = Dict.insert number placement state.placements
         done = placeOnly || (state.players == Dict.size placements)
-        placeRsp = PlaceRsp { gameid = state.gameid, number = number }
+        gameid = state.gameid
+        placeRsp = PlaceRsp { gameid = gameid, number = number }
         placementsList = if done then
                              List.map Tuple.second <| Dict.toList placements
                          else
@@ -428,46 +454,29 @@ placeReq state placeOnly message placement number =
                                       (newTurn turn resolver) ::his
                                   else
                                       his
-                        (gameOver, reason) =
+                        (response, phase2) =
                             if not done then
-                                (False, TimeoutReason)
-                            else if unresolvedPiles == [] then
-                                case findFullHomeCircle board renderInfo of
-                                    Nothing ->
-                                        (False, TimeoutReason)
-                                    Just player ->
-                                        (True
-                                        , HomeCircleFullReason
-                                            player placementsList
-                                        )
+                                (placeRsp, phase)
                             else
-                                if canResolve
-                                    board renderInfo (Just unresolvedPiles)
-                                then
-                                    (False, TimeoutReason)
-                                else
-                                    (True, UnresolvableReason placementsList)
+                                let placedRsp =
+                                        PlacedRsp { gameid = gameid
+                                                  , placements = placementsList
+                                                  }
+                                in
+                                    maybeGameOver board renderInfo gameid
+                                        placementsList unresolvedPiles
+                                        placedRsp phase
                     in
                         ( { state
                               | placements = plcmnts
                               , board = board
-                              , phase = phase
+                              , phase = phase2
                               , turn = turn
                               , resolver = resolver
                               , unresolvedPiles = unresolvedPiles
                               , history = history
                           }
-                        , if done then
-                              if gameOver then
-                                  GameOverRsp { gameid = state.gameid
-                                              , reason = reason
-                                              }
-                              else
-                                  PlacedRsp { gameid = state.gameid
-                                            , placements = placementsList
-                                            }
-                          else
-                              placeRsp
+                        , response
                         )
                 else
                     ( state
@@ -505,7 +514,8 @@ resolveReq state message resolution =
                 )
             else
                 let board = makeMove resolution state.board
-                    displayList = computeDisplayList board state.renderInfo
+                    renderInfo = state.renderInfo
+                    displayList = computeDisplayList board renderInfo
                     unresolvedPiles = displayList.unresolvedPiles
                     done = (unresolvedPiles == [])
                     phase = if done then
@@ -537,19 +547,23 @@ resolveReq state message resolution =
                                   } :: his
                               else
                                   his
-                    resolveRsp = ResolveRsp { gameid = state.gameid
+                    gameid = state.gameid
+                    resolveRsp = ResolveRsp { gameid = gameid
                                             , resolution = resolution
                                             }
+                    (response, phase2) =
+                        maybeGameOver board renderInfo gameid
+                            [resolution] unresolvedPiles resolveRsp phase
                 in
                     ( { state
                           | board = board
-                          , phase = phase
+                          , phase = phase2
                           , unresolvedPiles = unresolvedPiles
                           , turn = turn
                           , resolver = resolver
                           , history = history
                       }
-                    , resolveRsp
+                    , response
                     )
         _ ->
             ( state
@@ -644,6 +658,7 @@ undoReq state undoMessage =
                                     ( { state
                                           | board = board
                                           , unresolvedPiles = unresolvedPiles
+                                          , phase = ResolutionPhase
                                           , history
                                             = { turn
                                                   | resolutions =
