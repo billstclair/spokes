@@ -149,7 +149,7 @@ disconnection model socket =
                               else
                                   { model2
                                       | socketsDict =
-                                          Dict.insert gameid socks model.socketsDict
+                                          Dict.insert gameid socks socketsDict
                                   }
                             , Cmd.none
                             )
