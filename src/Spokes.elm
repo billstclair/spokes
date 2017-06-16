@@ -1410,27 +1410,32 @@ isResigned model number =
 
 inputItem : Int -> Model -> Html Msg
 inputItem player model =
-    let resigned = isResigned model player
-    in
+    if isResigned model player then
+        if player == model.playerNumber then
+            span []
+                [ span [ class "resigned" ]
+                      [ text "YOU" ]
+                , text " resigned. "
+                ]
+           else
+               span []
+                   [ span [ class "resigned" ]
+                         [ text <| getPlayerName player "Player" model ]
+                   , text " resigned. "
+                   ]
+    else
         span []
-            [ b [ span (if resigned then
-                            [ class "resigned" ]
-                        else
-                            []
-                       )
-                      [ text <| getPlayerName player "" model ]
+            [ b [ text <| getPlayerName player "" model 
                 , text ": "
                 ]
             , input [ type_ "text"
                     , onInput <| SetInput player
                     , disabled
-                          <| resigned ||
-                              (model.phase /= PlacementPhase) ||
+                          <| (model.phase /= PlacementPhase) ||
                               ((not model.isLocal) && (player /= model.playerNumber))
                     , placeholder
                           <| if player == model.lastFocus &&
-                              model.phase == PlacementPhase &&
-                              (not resigned)
+                              model.phase == PlacementPhase
                              then
                                  examplePlaceString player
                              else
