@@ -351,34 +351,39 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
         NodeClick nodeName ->
-            case model.selectedPile of
-                Nothing ->
-                    if placeOnly model then
-                        placeOnlyClick model nodeName
-                    else if (model.phase /= PlacementPhase) ||
-                        (String.all Char.isDigit nodeName)
-                    then
-                        ( model, Cmd.none )
-                    else
-                        let c = colorLetter model.inputColor
-                            input = c ++ nodeName
-                        in
-                            ( { model
-                                  | inputs
-                                      = Array.set
+            if isResigned model 0 then
+                ( model, Cmd.none )
+            else
+                case model.selectedPile of
+                    Nothing ->
+                        if placeOnly model then
+                            placeOnlyClick model nodeName
+                        else if (model.phase /= PlacementPhase) ||
+                            (String.all Char.isDigit nodeName)
+                        then
+                            ( model, Cmd.none )
+                        else
+                            let c = colorLetter model.inputColor
+                                input = c ++ nodeName
+                            in
+                                ( { model
+                                      | inputs
+                                        = Array.set
                                         (model.lastFocus-1) input model.inputs
-                                  , lastFocus
-                                      = if model.isLocal then
-                                            (model.lastFocus % model.players) + 1
-                                        else
-                                            model.lastFocus
-                              }
-                            , Cmd.none
-                            )
-                Just pile ->
-                    maybeMakeMove nodeName pile model
+                                      , lastFocus
+                                        = if model.isLocal then
+                                              (model.lastFocus % model.players) + 1
+                                          else
+                                              model.lastFocus
+                                  }
+                                , Cmd.none
+                                )
+                    Just pile ->
+                        maybeMakeMove nodeName pile model
         PileClick pile ->
-            if (placeOnly model) && (model.selectedPile == Nothing) then
+            if isResigned model 0 then
+                ( model, Cmd.none )
+            else if (placeOnly model) && (model.selectedPile == Nothing) then
                 placeOnlyClick model pile.nodeName
             else if (model.phase /= ResolutionPhase) ||
                 ((not model.isLocal) &&
@@ -444,6 +449,22 @@ placeOnlyClick model nodeName =
                                         }
                         )
 
+addChat : Model -> String -> (Model, Cmd Msg)
+addChat model message =
+    let chat = if model.chat == "" then
+                   model.chat
+               else
+                   model.chat ++ "\n"
+    in
+        ( { model | chat = chat ++ message }
+        , Task.attempt (\res ->
+                            case res of
+                                Ok scroll -> ChatScroll scroll
+                                Err _ -> Noop
+                       )
+            <| Scroll.y "chat"
+        )
+
 serverResponse : Model -> ServerInterface Msg -> Message -> (Model, Cmd Msg)
 serverResponse mod server message =
     let model = { mod | server = server }
@@ -451,19 +472,8 @@ serverResponse mod server message =
         case log "message" message of
             ChatRsp { text, number } ->
                 let name = getPlayerName number "Player " model
-                    chat = if model.chat == "" then
-                               model.chat
-                           else
-                               model.chat ++ "\n"
                 in
-                    ( { model | chat = chat ++ name ++ ": " ++ text }
-                    , Task.attempt (\res ->
-                                        case res of
-                                            Ok scroll -> ChatScroll scroll
-                                            Err _ -> Noop
-                                   )
-                         <| Scroll.y "chat"
-                    )
+                    addChat model <| name ++ ": " ++ text
             NewRsp { gameid, playerid, name } ->
                 ( { model
                       | gameid = gameid
@@ -607,15 +617,19 @@ serverResponse mod server message =
                 if gameid /= model.gameid then
                     ( model, Cmd.none )
                 else
-                    ( { model
-                          | resignedPlayers = adjoin number model.resignedPlayers
-                      }
-                    , if model.isLocal then
-                          send model model.server
-                              <| ResignReq { playerid = toString (number+1) }
+                    let m = { model
+                                | resignedPlayers =
+                                    adjoin number model.resignedPlayers
+                            }
+                        name = getPlayerName number "Player " model
+                    in
+                        if model.isLocal then
+                            ( m
+                            , send model model.server
+                                <| ResignReq { playerid = toString (number+1) }
+                            )
                       else
-                          Cmd.none
-                    )
+                          addChat m <| name ++ " resigned."
             GameOverRsp { gameid, reason } ->
                 if gameid /= model.gameid then
                     ( model, Cmd.none )
@@ -787,11 +801,30 @@ undoMove model =
                                        }
                         )
 
+nextResolver : Model -> Int
+nextResolver model =
+    let resigned = model.resignedPlayers
+        initialResolver = model.resolver
+        players = model.players
+        loop = (\resolver ->
+                    let r = (resolver % players) + 1
+                    in
+                        if List.member r resigned then
+                            if r == initialResolver then
+                                r --shouldn't happen
+                            else
+                                loop r
+                        else
+                            r
+               )
+    in
+        loop initialResolver
+
 resolution : Maybe Move -> DisplayList -> Model -> History -> (Int, ServerPhase, History)
 resolution maybeMove displayList model history =
     let resolved = displayList.unresolvedPiles == []
         resolver = if resolved then
-                       (model.resolver % model.players) + 1
+                       nextResolver model
                    else
                        model.resolver
         phase = if resolved then PlacementPhase else ResolutionPhase
@@ -910,7 +943,7 @@ placementLine model =
               <| (getPlayerName model.resolver "Player " model) ++
                   " will resolve. "
         , button [ onClick Place
-                 , disabled (not <| canPlace model)
+                 , disabled <| (isResigned model 0) || (not <| canPlace model)
                  ]
               [ text "Place" ]
         ]
@@ -962,7 +995,7 @@ unresignedPlayers model =
     in
         Set.toList <| Set.diff all resigned        
 
-winner : Model -> String
+winner : Model -> (Int, String)
 winner model =
     let scores = List.map (\player ->
                                (player, Board.count model.players player model.board)
@@ -983,17 +1016,24 @@ winner model =
                            scores
         of
             (player, _) :: _ ->
-                getPlayerName player "Player " model
+                (player, getPlayerName player "Player " model)
             _ ->
-                "Nobody"
+                (0, "Nobody")
 
 gameOverLine : Model -> GameOverReason -> Html Msg
 gameOverLine model reason =
     span []
         [ text <| "Game over. " ++ (gameOverReasonText model reason) ++ " "
-        , b [ text <| winner model
-            , text " wins!"
-            ]
+        , let (number, name) = winner model
+          in
+              b [ if number == model.playerNumber then
+                      text "You win!"
+                  else
+                      span []
+                      [ text <| name
+                      , text " wins!"
+                      ]
+                ]
         , text " "
         , button [ disabled True ] [ text "Game Over" ]
         ]
@@ -1363,29 +1403,38 @@ getPlayerName player prefix model =
             Just (_, name) ->
                 name
 
+isResigned : Model -> Int -> Bool
+isResigned model number =
+    List.member (if number == 0 then model.playerNumber else number)
+        model.resignedPlayers
+
 inputItem : Int -> Model -> Html Msg
 inputItem player model =
-    span []
-        [ b [ span (if List.member player model.resignedPlayers then
-                        [ class "resigned" ]
-                    else
-                        []
-                   )
-                  [ text <| getPlayerName player "" model ]
-            , text ": "
-            ]
-        , input [ type_ "text"
-                , onInput <| SetInput player
-                , disabled
-                      <| (model.phase /= PlacementPhase) ||
-                          ((not model.isLocal) && (player /= model.playerNumber))
-                , placeholder
-                      <| if player == model.lastFocus &&
-                          model.phase == PlacementPhase
-                         then
-                             examplePlaceString player
-                         else
-                             ""
+    let resigned = isResigned model player
+    in
+        span []
+            [ b [ span (if resigned then
+                            [ class "resigned" ]
+                        else
+                            []
+                       )
+                      [ text <| getPlayerName player "" model ]
+                , text ": "
+                ]
+            , input [ type_ "text"
+                    , onInput <| SetInput player
+                    , disabled
+                          <| resigned ||
+                              (model.phase /= PlacementPhase) ||
+                              ((not model.isLocal) && (player /= model.playerNumber))
+                    , placeholder
+                          <| if player == model.lastFocus &&
+                              model.phase == PlacementPhase &&
+                              (not resigned)
+                             then
+                                 examplePlaceString player
+                             else
+                                 ""
                 , size 5
                 , value (Maybe.withDefault "" <| Array.get (player-1) model.inputs)
                 , onFocus <| Focus player

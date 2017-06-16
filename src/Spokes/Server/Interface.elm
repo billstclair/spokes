@@ -171,6 +171,14 @@ checkPlayerid state message playerid phase =
                 Err <| errorRsp message IllegalRequestErr
                     ("Not " ++ (phaseToString phase) ++ " phase")
 
+checkResigned : GameState -> Int -> Message -> Maybe Message
+checkResigned gameState number message =
+    case LE.find (\p -> p == number) gameState.resignedPlayers of
+        Just _ ->
+            Just <| errorRsp message IllegalRequestErr "Player has resigned"
+        Nothing ->
+            Nothing
+
 processServerMessage : ServerState -> Message -> (ServerState, Message)
 processServerMessage state message =
     case message of
@@ -226,16 +234,24 @@ processServerMessage state message =
                 Err err ->
                         (state, err)
                 Ok (gameState, number) ->
-                    updateGameState state
-                        <| placeReq gameState state.placeOnly
-                            message placement number
+                    case checkResigned gameState number message of
+                        Just err ->
+                            (state, err)
+                        Nothing ->
+                            updateGameState state
+                                <| placeReq gameState state.placeOnly
+                                    message placement number
         ResolveReq { playerid, resolution } ->
             case checkPlayerid state message playerid ResolutionPhase of
                 Err err ->
                     (state, err)
-                Ok (gameState, _) ->
-                    updateGameState state
-                        <| resolveReq gameState message resolution
+                Ok (gameState, number) ->
+                    case checkResigned gameState number message of
+                        Just err ->
+                            (state, err)
+                        Nothing ->
+                            updateGameState state
+                                <| resolveReq gameState message resolution
         ResignReq { playerid } ->
             case checkOnlyPlayerid state message playerid of
                 Err err ->
@@ -256,14 +272,15 @@ processServerMessage state message =
                             resignMessage = ResignRsp { gameid = gameid
                                                       , number = number
                                                       }
+                            resignedPlayers = number :: gameState.resignedPlayers
                             gameOverRes = updateGameState
                                           state ( { gameState
                                                       | phase = gameOverPhase
+                                                      , resignedPlayers =
+                                                          resignedPlayers
                                                   }
                                                 , gameOverMessage
                                                 )
-                            resignedPlayers = adjoin
-                                              number gameState.resignedPlayers
                             resignGameState = { gameState
                                                   | resignedPlayers = resignedPlayers
                                               }
@@ -294,9 +311,13 @@ processServerMessage state message =
             case checkOnlyPlayerid state message playerid of
                 Err err ->
                     (state, err)
-                Ok (gameState, _) ->
-                    updateGameState state
-                        <| undoReq gameState message
+                Ok (gameState, number) ->
+                    case checkResigned gameState number message of
+                        Just err ->
+                            (state, err)
+                        Nothing ->
+                            updateGameState state
+                                <| undoReq gameState message
         -- Chat
         ChatReq { playerid, text } ->
             case checkOnlyPlayerid state message playerid of
@@ -398,10 +419,30 @@ maybeGameOver board renderInfo gameid moves unresolvedPiles response phase =
             , GameOverPhase reason
             )
 
+nextResolver : GameState -> Int
+nextResolver gameState =
+    let resigned = gameState.resignedPlayers
+        initialResolver = gameState.resolver
+        players = gameState.players
+        loop = (\resolver ->
+                    let r = (resolver % players) + 1
+                    in
+                        if List.member r resigned then
+                            if r == initialResolver then
+                                r --shouldn't happen
+                            else
+                                loop r
+                        else
+                            r
+               )
+    in
+        loop initialResolver
+
 placeReq : GameState -> Bool -> Message -> Move -> Int -> (GameState, Message)
 placeReq state placeOnly message placement number =
     let placements = Dict.insert number placement state.placements
-        done = placeOnly || (state.players == Dict.size placements)
+        players = state.players - (List.length state.resignedPlayers)
+        done = placeOnly || (players == Dict.size placements)
         gameid = state.gameid
         placeRsp = PlaceRsp { gameid = gameid, number = number }
         placementsList = if done then
@@ -430,7 +471,7 @@ placeReq state placeOnly message placement number =
                                      case displayList.unresolvedPiles of
                                          [] ->
                                              ( PlacementPhase, [], state.turn+1
-                                             , (state.resolver % state.players) + 1
+                                             , nextResolver state
                                              )
                                          piles ->
                                              ( ResolutionPhase, piles, state.turn
@@ -527,7 +568,7 @@ resolveReq state message resolution =
                            else
                                state.turn
                     resolver = if done then
-                                   (state.resolver % state.players) + 1
+                                   nextResolver state
                                else
                                    state.resolver
                     his = case state.history of
