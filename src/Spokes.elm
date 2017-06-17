@@ -465,6 +465,37 @@ addChat model message =
             <| Scroll.y "chat"
         )
 
+placedRsp : Model -> String -> List Move -> Model
+placedRsp model gameid placements =
+    let board = List.foldr makeMove model.board placements
+        his = case model.history of
+                  [] ->
+                      -- won't happen
+                      let turn = newTurn 1 1
+                      in
+                          [{ turn | placements = placements }]
+                  turn :: tail ->
+                      let tl = if turn.placements /= [] then
+                                   turn :: tail
+                               else
+                                   tail
+                      in
+                          { turn | placements = placements }
+                          :: tl
+        displayList = computeDisplayList board model.renderInfo
+        (resolver, phase, history) = resolution Nothing displayList model his
+    in
+        { model
+            | history = history
+            , board = board
+            , resolver = resolver
+            , phase = phase
+            , lastFocus = if model.isLocal then 1 else model.lastFocus
+            , displayList = displayList
+            , inputs = initialInputs
+            , placement = Nothing
+        }
+
 serverResponse : Model -> ServerInterface Msg -> Message -> (Model, Cmd Msg)
 serverResponse mod server message =
     let model = { mod | server = server }
@@ -564,38 +595,9 @@ serverResponse mod server message =
                     else
                         (model, Cmd.none)
             PlacedRsp { gameid, placements } ->
-                let board = List.foldr makeMove model.board placements
-                    his = case model.history of
-                              [] ->
-                                  -- won't happen
-                                  let turn = newTurn 1 1
-                                  in
-                                      [{ turn | placements = placements }]
-                              turn :: tail ->
-                                  let tl = if turn.placements /= [] then
-                                               turn :: tail
-                                           else
-                                               tail
-                                  in
-                                      { turn | placements = placements }
-                                      :: tl
-                    displayList = computeDisplayList
-                                  board model.renderInfo
-                    (resolver, phase, history)
-                        = resolution Nothing displayList model his
-                in
-                    ( { model
-                          | history = history
-                          , board = board
-                          , resolver = resolver
-                          , phase = phase
-                          , lastFocus = if model.isLocal then 1 else model.lastFocus
-                          , displayList = displayList
-                          , inputs = initialInputs
-                          , placement = Nothing
-                      }
-                    , Cmd.none
-                    )
+                ( placedRsp model gameid placements
+                , Cmd.none
+                )
             ResolveRsp record ->
                 let move = record.resolution
                     board = makeMove move model.board
@@ -613,7 +615,7 @@ serverResponse mod server message =
                       }
                     , Cmd.none
                     )
-            ResignRsp { gameid, number } ->
+            ResignRsp { gameid, number, placements } ->
                 if gameid /= model.gameid then
                     ( model, Cmd.none )
                 else
@@ -622,23 +624,36 @@ serverResponse mod server message =
                                     adjoin number model.resignedPlayers
                             }
                         name = getPlayerName number "Player " model
-                        resolver = if ((model.phase == ResolutionPhase) ||
-                                           (number == m.playerNumber)
-                                      ) &&
-                                      (number == m.resolver)
-                                   then
-                                       nextResolver m
-                                   else
-                                       m.resolver
-                        m2 = { m | resolver = resolver }
+                        (resolver, history) =
+                            if (number == m.resolver) then
+                                let res = nextResolver m
+                                in
+                                    ( res
+                                    , 
+                                        case m.history of
+                                            turn :: tail ->
+                                                { turn | resolver = res } :: tail
+                                            his ->
+                                                his
+                                    )
+                            else
+                                (m.resolver, m.history)
+                        m2 = { m | resolver = resolver
+                             , history = history
+                             }
+                        m3 = case placements of
+                                 Nothing ->
+                                     m2
+                                 Just plcmnts ->
+                                     placedRsp m2 gameid plcmnts
                     in
                         if model.isLocal then
-                            ( m2
-                            , send model model.server
+                            ( m3
+                            , send m3 m3.server
                                 <| ResignReq { playerid = toString (number+1) }
                             )
-                      else
-                          addChat m2 <| name ++ " resigned."
+                        else
+                            addChat m3 <| name ++ " resigned."
             GameOverRsp { gameid, reason } ->
                 if gameid /= model.gameid then
                     ( model, Cmd.none )

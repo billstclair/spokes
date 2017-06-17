@@ -269,10 +269,6 @@ processServerMessage state message =
                                 GameOverRsp { gameid = gameid
                                             , reason = resignReason
                                             }
-                            resignMessage = ResignRsp { gameid = gameid
-                                                      , number = number
-                                                      , placements = Nothing
-                                                      }
                             resignedPlayers = number :: gameState.resignedPlayers
                             gameOverRes = updateGameState
                                           state ( { gameState
@@ -282,21 +278,10 @@ processServerMessage state message =
                                                   }
                                                 , gameOverMessage
                                                 )
-                            resignGameState = { gameState
-                                                  | resignedPlayers = resignedPlayers
-                                              }
-                            resolver = if (gameState.phase == ResolutionPhase) &&
-                                            (number == gameState.resolver)
-                                       then
-                                           nextResolver resignGameState
-                                       else
-                                           gameState.resolver
+                            (gs2, resignMessage) =
+                                processResign gameState gameid number resignedPlayers
                             resignRes = updateGameState
-                                        state ( { resignGameState
-                                                    | resolver = resolver
-                                                }
-                                              , resignMessage
-                                              )
+                                        state ( gs2 , resignMessage )
                         in
                             case gameState.phase of
                                 GameOverPhase _ ->
@@ -343,6 +328,108 @@ processServerMessage state message =
             ( state
             , errorRsp message IllegalRequestErr "Illegal Request"
             )
+
+processResign : GameState -> String -> Int -> List Int -> (GameState, Message)
+processResign state gameid number resignedPlayers =
+    let resignMessage = ResignRsp { gameid = gameid
+                                  , number = number
+                                  , placements = Nothing
+                                  }
+        state2 = { state
+                     | resignedPlayers = resignedPlayers
+                 }
+        phase = state.phase
+        resolver = state2.resolver
+        (resolver2, history) =
+            if ((phase == ResolutionPhase) || (phase == PlacementPhase)) &&
+               (number == resolver)
+            then
+                let r2 = nextResolver state2
+                in
+                    ( r2
+                    , case state2.history of
+                          turn :: tail ->
+                              { turn | resolver = r2 } :: tail
+                          h ->
+                              h
+                    )
+            else
+                (resolver, state2.history)
+    in
+        if phase /= PlacementPhase then
+            (state2, resignMessage)
+        else
+            -- It would be lovely to merge this with the placeReq() code
+            let placements = state2.placements
+                players = state2.players - (List.length resignedPlayers)
+                done = (players == Dict.size placements)
+                placementsList = if done then
+                                     List.map Tuple.second
+                                         <| Dict.toList placements
+                                 else
+                                     []
+                plcmnts = if done then
+                              Dict.empty
+                          else
+                              placements
+                board = if done then
+                            List.foldl makeMove state2.board placementsList
+                        else
+                            state2.board
+                info = state2.renderInfo
+                (phase2, unresolvedPiles, turn, resolver3) =
+                    if done then
+                        let displayList = computeDisplayList board info
+                        in
+                            case displayList.unresolvedPiles of
+                                [] ->
+                                    ( PlacementPhase, [], state2.turn+1
+                                    , if number /= resolver then
+                                          nextResolver state2
+                                      else
+                                          resolver2
+                                    )
+                                piles ->
+                                    ( ResolutionPhase, piles, state2.turn
+                                    , resolver2
+                                    )
+                    else
+                        (PlacementPhase, [], state2.turn, resolver2)
+                his = if done then
+                          case history of
+                              turn :: tail ->
+                                  { turn | placements = placementsList } ::
+                                      tail
+                              h ->
+                                  h
+                      else
+                          history
+                history2 = (newTurn turn resolver3) :: his
+                (response, phase3) =
+                    if not done then
+                        (resignMessage, phase2)
+                    else
+                        let placedRsp = ResignRsp
+                                        { gameid = gameid
+                                        , number = number
+                                        , placements = Just placementsList
+                                        }
+                        in
+                            maybeGameOver board info gameid
+                                placementsList unresolvedPiles
+                                placedRsp phase2
+            in
+                ( { state2
+                      | placements = plcmnts
+                      , board = board
+                      , phase = phase3
+                      , turn = turn
+                      , resolver = resolver3
+                      , unresolvedPiles = unresolvedPiles
+                      , history = history2
+                  }
+                , response
+                )
 
 updateGameState : ServerState -> (GameState, Message) -> (ServerState, Message)
 updateGameState state (gameState, message) =
@@ -471,11 +558,11 @@ placeReq state placeOnly message placement number =
                                         makeMove state.board placementsList
                                 else
                                     state.board
-                        renderInfo = state.renderInfo
+                        info = state.renderInfo
                         (phase, unresolvedPiles, turn, resolver) =
                              if done then
                                  let displayList =
-                                         computeDisplayList board renderInfo
+                                         computeDisplayList board info
                                  in
                                      case displayList.unresolvedPiles of
                                          [] ->
@@ -486,8 +573,8 @@ placeReq state placeOnly message placement number =
                                              ( ResolutionPhase, piles, state.turn
                                              , state.resolver
                                              )
-                                else
-                                    (PlacementPhase, [], state.turn, state.resolver)
+                             else
+                                 (PlacementPhase, [], state.turn, state.resolver)
                         his = if done then
                                   case state.history of
                                       turn :: tail ->
@@ -513,7 +600,7 @@ placeReq state placeOnly message placement number =
                                                   , placements = placementsList
                                                   }
                                 in
-                                    maybeGameOver board renderInfo gameid
+                                    maybeGameOver board info gameid
                                         placementsList unresolvedPiles
                                         placedRsp phase
                     in
