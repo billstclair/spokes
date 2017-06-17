@@ -285,8 +285,16 @@ processServerMessage state message =
                             resignGameState = { gameState
                                                   | resignedPlayers = resignedPlayers
                                               }
+                            resolver = if (gameState.phase == ResolutionPhase) &&
+                                            (number == gameState.resolver)
+                                       then
+                                           nextResolver resignGameState
+                                       else
+                                           gameState.resolver
                             resignRes = updateGameState
-                                        state ( resignGameState
+                                        state ( { resignGameState
+                                                    | resolver = resolver
+                                                }
                                               , resignMessage
                                               )
                         in

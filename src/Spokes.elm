@@ -622,14 +622,23 @@ serverResponse mod server message =
                                     adjoin number model.resignedPlayers
                             }
                         name = getPlayerName number "Player " model
+                        resolver = if ((model.phase == ResolutionPhase) ||
+                                           (number == m.playerNumber)
+                                      ) &&
+                                      (number == m.resolver)
+                                   then
+                                       nextResolver m
+                                   else
+                                       m.resolver
+                        m2 = { m | resolver = resolver }
                     in
                         if model.isLocal then
-                            ( m
+                            ( m2
                             , send model model.server
                                 <| ResignReq { playerid = toString (number+1) }
                             )
                       else
-                          addChat m <| name ++ " resigned."
+                          addChat m2 <| name ++ " resigned."
             GameOverRsp { gameid, reason } ->
                 if gameid /= model.gameid then
                     ( model, Cmd.none )
