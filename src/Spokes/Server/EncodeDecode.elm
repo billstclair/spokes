@@ -420,7 +420,7 @@ parseResponse msg params rawMessage =
                                            , resolution = res
                                            }
         "resign" ->
-            let { gameid, number } = params
+            let { gameid, number, placements } = params
             in
                 case gameid of
                     Nothing ->
@@ -432,8 +432,8 @@ parseResponse msg params rawMessage =
                             Just num ->
                                 ResignRsp { gameid = gid
                                           , number = num
+                                          , placements = placements         
                                           }
-
         "gameover" ->
             let { gameid, reason } = params
             in
@@ -591,9 +591,19 @@ messageEncoder message =
         -- End of game
         ResignReq { playerid } ->
             messageValue "req" "resign" [ ("playerid", playerid) ]
-        ResignRsp { gameid, number } ->
-            messageValue "rsp" "resign" [ ("gameid", gameid)
-                                        , ("number", toString number) ]
+        ResignRsp { gameid, number, placements } ->
+            let placementParams =
+                    case placements of
+                        Nothing ->
+                            []
+                        Just ps ->
+                            [ ("placements", placementsString ps) ]
+            in
+                messageValue "rsp" "resign"
+                    <| List.append[ ("gameid", gameid)
+                                  , ("number", toString number)
+                                  ]
+                        placementParams
         GameOverRsp { gameid, reason } ->
             let (s, number, placements, resolution) = gameOverReasonToString reason
                 params = case placements of

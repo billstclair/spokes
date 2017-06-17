@@ -81,7 +81,12 @@ protocolData =
     , ResolveReq { playerid = "p1", resolution = Resolution MoveBlock "C3" "D3" }
     , ResolveRsp { gameid = "asdf", resolution = Resolution MoveBlock "C3" "D3" }
     , ResignReq { playerid = "p1" }
-    , ResignRsp { gameid = "asdf", number = 1 }
+    , ResignRsp { gameid = "asdf", number = 1, placements = Nothing }
+    , ResignRsp { gameid = "asdf", number = 1
+                , placements = Just [ Placement White "C1"
+                                    , Placement Black "D3"
+                                    ]
+                }
     , GameOverRsp { gameid = "asdf", reason = ResignationReason 2 }
     , GameOverRsp { gameid = "asdf"
                   , reason = UnresolvableReason [ Placement White "C1"

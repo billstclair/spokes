@@ -271,6 +271,7 @@ processServerMessage state message =
                                             }
                             resignMessage = ResignRsp { gameid = gameid
                                                       , number = number
+                                                      , placements = Nothing
                                                       }
                             resignedPlayers = number :: gameState.resignedPlayers
                             gameOverRes = updateGameState

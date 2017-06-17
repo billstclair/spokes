@@ -255,7 +255,7 @@ type Message
     | ResolveRsp { gameid : String, resolution : Move }
     -- End of game
     | ResignReq { playerid : String }
-    | ResignRsp { gameid : String, number: Int }
+    | ResignRsp { gameid : String, number: Int, placements : Maybe (List Move) }
     | GameOverRsp { gameid : String, reason: GameOverReason }
     -- Errors
     | UndoReq { playerid : String, message: Message }
