@@ -306,7 +306,10 @@ update msg model =
                     )
         ResignGame ->
             ( { model
-                  | phase = ResignedPhase
+                  | phase = if model.players == 2 then
+                                ResignedPhase
+                            else
+                                model.phase
                   , resignedPlayers = (if model.isLocal then
                                            1
                                        else
@@ -1099,7 +1102,8 @@ renderHelpPage model =
 
 isPlaying : Model -> Bool
 isPlaying model =
-    List.member model.phase [JoinPhase, PlacementPhase, ResolutionPhase]
+    (List.member model.phase [JoinPhase, PlacementPhase, ResolutionPhase]) &&
+        (not <| List.member model.playerNumber model.resignedPlayers)
 
 onKeydown : (Int -> msg) -> Attribute msg
 onKeydown tagger =
