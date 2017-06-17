@@ -1483,9 +1483,13 @@ nodeToString node =
         then
             ws ++ bs
         else
-            -- This shouldn't happen
+            -- This shouldn't happen.
+            -- In a real game, both ws & bs are in the range 0-4.
+            -- But the representation doesn't have that limitation, so handle it.
             "[" ++ ws ++ "," ++ bs ++ "]"
 
+-- This depends on Dict.foldl calling the function in sorted-by-node-name order.
+-- If a Dict were a hash table, it could depend on the order of insertion.
 boardToString : Board -> String
 boardToString board =
     let list = Dict.foldl (\name node res ->
