@@ -110,6 +110,26 @@ protocolData =
                   }
     , GameOverRsp { gameid = "asdf", reason = TimeoutReason }
     , GameOverRsp { gameid = "asdf", reason = UnknownReason "unknown" }
+    , GamesReq
+    , GamesRsp { twoPlayer = [ { gameid = "1"
+                               , players = 2
+                               , playerNames = [ "Bill" ]
+                               }
+                             , { gameid = "2"
+                               , players = 2
+                               , playerNames = [ "Bob" ]
+                               }
+                             ]
+               , fourPlayer = [ { gameid = "3"
+                                , players = 4
+                                , playerNames = [ "Joe", "Frank" ]
+                                }
+                              , { gameid = "4"
+                                , players = 4
+                                , playerNames = [ "Randy", "Mel", "Doug" ]
+                                }
+                              ]
+               }
     , UndoReq { playerid = "p1"
               , message = PlacedRsp
                           { gameid = "asdf"

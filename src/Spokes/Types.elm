@@ -16,6 +16,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , StonePile, DisplayList
                              , Message(..), ServerPhase(..), GameOverReason(..)
                              , GameState, ServerState, ServerInterface(..)
+                             , PublicGames, PublicGame
                              , zeroPoint, emptyStonePile, emptyDisplayList
                              , get, set, butLast, adjoin
                              , movedStoneString, stringToMovedStone
@@ -233,6 +234,17 @@ type GameOverReason
     | TimeoutReason
     | UnknownReason String
 
+type alias PublicGame =
+    { gameid : String
+    , players : Int
+    , playerNames : List String
+    }
+
+type alias PublicGames =
+    { twoPlayer : List PublicGame
+    , fourPlayer : List PublicGame
+    }
+
 type Message
     = RawMessage String String (List (String, String))
     -- Basic game play
@@ -257,6 +269,9 @@ type Message
     | ResignReq { playerid : String }
     | ResignRsp { gameid : String, number: Int, placements : Maybe (List Move) }
     | GameOverRsp { gameid : String, reason: GameOverReason }
+    -- Public games
+    | GamesReq
+    | GamesRsp PublicGames
     -- Errors
     | UndoReq { playerid : String, message: Message }
     | UndoRsp { gameid : String, message: Message }

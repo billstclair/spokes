@@ -14,6 +14,7 @@ module Spokes.Server.EncodeDecode exposing ( messageDecoder, decodeMessage
                                            )
 
 import Spokes.Types exposing ( Color(..), Move(..), Message(..), GameOverReason(..)
+                             , PublicGames, PublicGame
                              , movedStoneString, stringToMovedStone
                              , get
                              )
@@ -50,6 +51,7 @@ type alias MessageParams =
     , request : Maybe String
     , id : Maybe Int
     , text : Maybe String
+    , games : Maybe String
     , reason : Maybe GameOverReason
     }
 
@@ -76,6 +78,7 @@ rawMessageToParams message =
                      , request = get "request" plist
                      , id = maybeInt <| get "id" plist
                      , text = get "text" plist
+                     , games = get "games" plist
                      , reason = maybeGameOverReason
                             (get "reason" plist)
                             (get "reasonnumber" plist)
@@ -240,6 +243,23 @@ messageDecoder : Decoder Message
 messageDecoder =
     JD.lazy (\_ -> JD.map parseRawMessage rawMessageDecoder)
 
+publicGameDecoder : Decoder PublicGame
+publicGameDecoder =
+    JD.map3 PublicGame
+        (JD.field "gameid" JD.string)
+        (JD.field "players" JD.int)
+        (JD.field "playerNames" <| JD.list JD.string)
+
+publicGamesDecoder : Decoder PublicGames
+publicGamesDecoder =
+    JD.map2 PublicGames
+        (JD.field "twoPlayer" <| JD.list publicGameDecoder)
+        (JD.field "fourPlayer" <| JD.list publicGameDecoder)
+
+decodePublicGames : String -> Result String PublicGames
+decodePublicGames string =
+    JD.decodeString publicGamesDecoder string
+
 allStrings : List (Maybe String) -> Maybe (List String)
 allStrings strings =
     let loop = (\list res ->
@@ -304,6 +324,8 @@ parseRequest msg params rawMessage =
                                 ResolveReq { playerid = pid
                                            , resolution = res
                                            }
+        "games" ->
+            GamesReq
         "undo" ->
             let { playerid, message } = params
             in
@@ -448,7 +470,18 @@ parseResponse msg params rawMessage =
                                 GameOverRsp { gameid = gid
                                             , reason = reas
                                             }
-
+        "games" ->
+            let { games } = params
+            in
+                case games of
+                    Nothing ->
+                        rawMessage
+                    Just g ->
+                        case decodePublicGames g of
+                            Err _ ->
+                                rawMessage
+                            Ok publicGames ->
+                                GamesRsp publicGames
         "undo" ->
             let { gameid, message } = params
             in
@@ -530,6 +563,27 @@ placementsString : List Move -> String
 placementsString placements =
     String.join "," <| List.map placementText placements
 
+publicGameEncoder : PublicGame -> Value
+publicGameEncoder game =
+    JE.object [ ("gameid", JE.string game.gameid)
+              , ("players", JE.int game.players)
+              , ("playerNames", JE.list <| List.map JE.string game.playerNames)
+              ]
+
+publicGamesEncoder : PublicGames -> Value
+publicGamesEncoder games =
+    JE.object [ ( "twoPlayer"
+                , JE.list <| List.map publicGameEncoder games.twoPlayer
+                )
+              , ( "fourPlayer"
+                , JE.list <| List.map publicGameEncoder games.fourPlayer
+                )
+              ]
+
+encodePublicGames : PublicGames -> String
+encodePublicGames games =
+    JE.encode 0 <| publicGamesEncoder games
+
 messageEncoder : Message -> Value
 messageEncoder message =
     case message of
@@ -588,6 +642,11 @@ messageEncoder message =
                                              , ("from", from)
                                              , ("to", to)
                                              ]
+        -- Public games
+        GamesReq ->
+            messageValue "req" "games" []
+        GamesRsp games ->
+            messageValue "rsp" "games" [ ("games", encodePublicGames games) ]
         -- End of game
         ResignReq { playerid } ->
             messageValue "req" "resign" [ ("playerid", playerid) ]
