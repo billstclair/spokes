@@ -22,6 +22,7 @@ import Spokes.Types as Types
              , History, newTurn, Message(..), ServerPhase(..)
              , GameState, ServerState, ServerInterface(..)
              , GameOverReason(..)
+             , PublicGames, PublicGame, emptyPublicGames
              , butLast, adjoin
              )
 import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
@@ -42,6 +43,7 @@ emptyServerState =
     , playeridDict = Dict.empty
     , gameDict = Dict.empty
     , placeOnly = False
+    , publicGames = emptyPublicGames
     }
 
 dummyGameid : String
@@ -183,41 +185,8 @@ processServerMessage : ServerState -> Message -> (ServerState, Message)
 processServerMessage state message =
     case message of
         -- Basic game play
-        NewReq { players, name } ->
-            if players == 2 || players == 4 then
-                let info = emptyGameState.renderInfo
-                    gameState = { emptyGameState
-                                    | players = players
-                                    , renderInfo = { info | players = Just players }
-                                    , resolver = 2 --auto-join
-                                }
-                    gameid = gameState.gameid
-                    playerid = "1"
-                    playerInfo = { gameid = gameid
-                                 , number = 1
-                                 , name = name
-                                 }
-                    st2 = { state
-                              | gameDict =
-                                  Dict.insert gameid gameState state.gameDict
-                              , playeridDict =
-                                  Dict.insert gameid [playerid] state.playeridDict
-                              , playerInfoDict =
-                                  Dict.insert playerid playerInfo
-                                      state.playerInfoDict
-                          }                        
-                    msg = NewRsp { gameid = gameid
-                                 , playerid = playerid
-                                 , players = players
-                                 , name = name
-                                 }
-                in
-                    -- The non-proxy server will generate new gameid and playerid
-                    (st2, msg)
-            else
-                ( state
-                , errorRsp message IllegalPlayerCountErr "Players must be 2 or 4"
-                )
+        NewReq { players, name, isPublic } ->
+            newReq state message players name isPublic
         JoinReq { gameid, name } ->
             case checkGameid state message gameid JoinPhase of
                 Err err ->
@@ -300,6 +269,11 @@ processServerMessage state message =
                                         gameOverRes
                                     else
                                         resignRes
+        -- Public games
+        GamesReq ->
+            ( state
+            , GamesRsp state.publicGames
+            )
         -- Errors
         UndoReq { playerid, message } ->
             case checkOnlyPlayerid state message playerid of
@@ -328,6 +302,87 @@ processServerMessage state message =
             ( state
             , errorRsp message IllegalRequestErr "Illegal Request"
             )
+
+getGameList : PublicGames -> Int -> List PublicGame
+getGameList games players =
+    case players of
+        2 ->
+            games.twoPlayer
+        4 ->
+            games.fourPlayer
+        _ ->
+            []
+
+setGameList : PublicGames -> Int -> List PublicGame -> PublicGames
+setGameList games players publicGames =
+    case players of
+        2 ->
+            { games | twoPlayer = publicGames }
+        4 ->
+            { games | fourPlayer = publicGames }
+        _ ->
+            games
+
+appendGameList : PublicGames -> Int -> PublicGame -> PublicGames    
+appendGameList games players game =
+    setGameList games players
+        <| List.append (getGameList games players) [game]
+
+maximumPublicGames : Int
+maximumPublicGames =
+    10
+
+newReq : ServerState -> Message -> Int -> String -> Bool -> (ServerState, Message)
+newReq state message players name isPublic =
+    if not (players == 2 || players == 4) then
+        ( state
+        , errorRsp message IllegalPlayerCountErr "Players must be 2 or 4"
+        )
+    else
+        if isPublic then
+            let list = getGameList state.publicGames players
+            in
+                if (List.length list) >= maximumPublicGames then
+                    ( state
+                    , errorRsp message TooManyPublicGamesErr
+                        "There are already too many public games."
+                    )
+                else
+                    newReqInternal state message players name isPublic
+        else
+            newReqInternal state message players name isPublic
+
+newReqInternal : ServerState -> Message -> Int -> String -> Bool -> (ServerState, Message)
+newReqInternal state message players name isPublic =
+    let info = emptyGameState.renderInfo
+        gameState = { emptyGameState
+                        | players = players
+                        , renderInfo = { info | players = Just players }
+                        , resolver = 2 --auto-join
+                    }
+        gameid = gameState.gameid
+        playerid = "1"
+        playerInfo = { gameid = gameid
+                     , number = 1
+                     , name = name
+                     }
+        st2 = { state
+                  | gameDict =
+                      Dict.insert gameid gameState state.gameDict
+                  , playeridDict =
+                      Dict.insert gameid [playerid] state.playeridDict
+                  , playerInfoDict =
+                      Dict.insert playerid playerInfo
+                          state.playerInfoDict
+              }                        
+        msg = NewRsp { gameid = gameid
+                     , playerid = playerid
+                     , players = players
+                     , name = name
+                     }
+    in
+        -- The non-proxy server will generate new gameid and playerid
+        (st2, msg)
 
 processResign : GameState -> String -> Int -> List Int -> (GameState, Message)
 processResign state gameid number resignedPlayers =

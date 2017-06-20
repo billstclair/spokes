@@ -59,7 +59,8 @@ protocolTest message =
 protocolData : List Message
 protocolData =
     [ RawMessage "foo" "bar" [("bletch", "gronk"), ("1", "2")]
-    , NewReq { players = 2, name = "Fred" }
+    , NewReq { players = 2, name = "Fred", isPublic = False }
+    , NewReq { players = 4, name = "Bob", isPublic = True }
     , NewRsp { gameid = "asdf", playerid = "p1", players = 4, name = "John" }
     , JoinReq { gameid = "asdf", name = "bill" }
     , JoinRsp { gameid = "asdf"

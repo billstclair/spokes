@@ -168,6 +168,7 @@ init =
                   , send initialModel initialModel.server
                       <| NewReq { players = initialModel.players
                                 , name = initialModel.name
+                                , isPublic = False
                                 }
                   ]
       else
@@ -275,6 +276,7 @@ update msg model =
                 , send model server
                     <| NewReq { players = players
                               , name = initialPlayerName 1 model
+                              , isPublic = False
                               }
                 )
         JoinGame ->

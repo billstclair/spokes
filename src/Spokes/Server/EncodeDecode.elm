@@ -52,6 +52,7 @@ type alias MessageParams =
     , id : Maybe Int
     , text : Maybe String
     , games : Maybe String
+    , isPublic : Bool
     , reason : Maybe GameOverReason
     }
 
@@ -79,6 +80,8 @@ rawMessageToParams message =
                      , id = maybeInt <| get "id" plist
                      , text = get "text" plist
                      , games = get "games" plist
+                     , isPublic = Maybe.withDefault False
+                                  <| maybeBool (get "isPublic" plist)
                      , reason = maybeGameOverReason
                             (get "reason" plist)
                             (get "reasonnumber" plist)
@@ -98,6 +101,20 @@ maybeInt ms =
                 Ok i ->
                     Just i
                 Err _ ->
+                    Nothing
+
+maybeBool : Maybe String -> Maybe Bool
+maybeBool mb =
+    case mb of
+        Nothing ->
+            Nothing
+        Just s ->
+            case s of
+                "true" ->
+                    Just True
+                "false" ->
+                    Just False
+                _ ->
                     Nothing
 
 maybePlacement : Maybe String -> Maybe Move
@@ -278,7 +295,7 @@ parseRequest : String -> MessageParams -> Message -> Message
 parseRequest msg params rawMessage =
     case msg of
         "new" ->
-            let { players, name } = params
+            let { players, name, isPublic } = params
                 p = case players of
                         Nothing -> 2
                         Just ps -> ps
@@ -287,7 +304,10 @@ parseRequest msg params rawMessage =
                     Nothing ->
                         rawMessage
                     Just n ->
-                        NewReq { players = p, name = n }
+                        NewReq { players = p
+                               , name = n
+                               , isPublic = isPublic
+                               }
         "join" ->
             let { gameid, name } = params
             in
@@ -590,10 +610,18 @@ messageEncoder message =
         RawMessage typ msg plist ->
             messageValue typ msg plist
         -- Basic game play
-        NewReq { players, name } ->
-            messageValue "req" "new" [ ("players", toString players)
-                                     , ("name", name)
-                                     ]
+        NewReq { players, name, isPublic } ->
+            let isPublicPairs =
+                    if isPublic then
+                        [ ("isPublic", "true") ]
+                    else
+                        []
+            in
+                messageValue "req" "new"
+                    <| List.append [ ("players", toString players)
+                                   , ("name", name)
+                                   ]
+                        isPublicPairs
         NewRsp { gameid, playerid, players, name } ->
             messageValue "rsp" "new" [ ("gameid", gameid)
                                      , ("playerid", playerid)

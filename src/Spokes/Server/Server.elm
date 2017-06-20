@@ -103,9 +103,21 @@ update message model =
             )
     Noop -> (model, Cmd.none)
 
+removeFromPublicGames : ServerState -> String -> ServerState
+removeFromPublicGames state gameid =
+    let games = state.publicGames
+        filter = (\game -> game.gameid /= gameid)
+    in
+        { state
+            | publicGames =
+              { twoPlayer = List.filter filter games.twoPlayer
+              , fourPlayer = List.filter filter games.fourPlayer
+              }
+        }
+
 killGame : Model -> String -> Model
 killGame model gameid =
-    let state = model.state
+    let state = removeFromPublicGames model.state gameid
         playerInfoDict = state.playerInfoDict
         playeridDict = state.playeridDict
         gameDict = state.gameDict

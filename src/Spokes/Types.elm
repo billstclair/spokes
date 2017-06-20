@@ -16,7 +16,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , StonePile, DisplayList
                              , Message(..), ServerPhase(..), GameOverReason(..)
                              , GameState, ServerState, ServerInterface(..)
-                             , PublicGames, PublicGame
+                             , PublicGames, PublicGame, emptyPublicGames
                              , zeroPoint, emptyStonePile, emptyDisplayList
                              , get, set, butLast, adjoin
                              , movedStoneString, stringToMovedStone
@@ -245,10 +245,15 @@ type alias PublicGames =
     , fourPlayer : List PublicGame
     }
 
+emptyPublicGames : PublicGames
+emptyPublicGames = { twoPlayer = []
+                   , fourPlayer = []
+                   }
+
 type Message
     = RawMessage String String (List (String, String))
     -- Basic game play
-    | NewReq { players : Int, name : String }
+    | NewReq { players : Int, name : String, isPublic : Bool }
     | NewRsp { gameid : String
              , players : Int
              , name : String
@@ -299,6 +304,7 @@ type alias ServerState =
     , playeridDict : Dict String (List String) -- gameid -> List playerid
     , gameDict : Dict String GameState --gameid -> GameState
     , placeOnly : Bool
+    , publicGames : PublicGames
     }
 
 type alias GameState =
