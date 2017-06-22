@@ -38,6 +38,7 @@ type Msg
     | ChatScroll Float
     | SetPlayers Int
     | SetIsLocal Bool
+    | SetIsGlobal Bool
     | SetName String
     | SetGameid String
     | SetServerUrl String

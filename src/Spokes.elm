@@ -19,6 +19,7 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , ServerPhase(..), ServerInterface(..)
                                       , Message(..)
                                       , GameOverReason(..)
+                                      , PublicGames, PublicGame, emptyPublicGames
                                       , movedStoneString, butLast, adjoin
                                       )
 import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
@@ -85,8 +86,10 @@ type alias Model =
     , serverUrl : String
     , isLocal : Bool
     , newIsLocal : Bool
+    , isPublic : Bool
     , name : String
     , newGameid : String
+    , publicGames : PublicGames
     , chat : String
     , chatInput : String
     , chatScroll : Float
@@ -126,8 +129,10 @@ initialModel =
     , serverUrl = "ws://localhost:8080"
     , isLocal = False
     , newIsLocal = False
+    , isPublic = False
     , name = "Player 1"
     , newGameid = ""
+    , publicGames = emptyPublicGames
     , chat = ""
     , chatInput = ""
     , chatScroll = -1000
@@ -228,7 +233,10 @@ update msg model =
                     )                    
         SetPage page ->
             ( { model | page = page }
-            , Cmd.none
+            , if page == PublicPage then
+                  send model model.server GamesReq
+              else
+                  Cmd.none
             )
         SetPlayers players ->
             ( { model | newPlayers = players }
@@ -236,6 +244,10 @@ update msg model =
             )
         SetIsLocal local ->
             ( { model | newIsLocal = local }
+            , Cmd.none
+            )
+        SetIsGlobal public ->
+            ( { model | isPublic = public }
             , Cmd.none
             )
         SetName name ->
@@ -276,7 +288,7 @@ update msg model =
                 , send model server
                     <| NewReq { players = players
                               , name = initialPlayerName 1 model
-                              , isPublic = False
+                              , isPublic = model.isPublic
                               }
                 )
         JoinGame ->
@@ -1163,6 +1175,18 @@ renderGamePage model =
                        <| SetPlayers 2
                    , radio "players" "4 " (model.newPlayers == 4) nostart
                        <| SetPlayers 4
+                   , if model.newIsLocal then
+                         text ""
+                     else
+                         span []
+                             [ input [ type_ "checkbox"
+                                     , onCheck SetIsGlobal
+                                     , checked model.isPublic
+                                     , disabled nostart
+                                     ]
+                                   []
+                             , text "global "
+                             ]
                    , button [ onClick <| if nostart then ResignGame else NewGame
                             ]
                        [ text <| if nostart then "Resign Game" else "New Game" ]
