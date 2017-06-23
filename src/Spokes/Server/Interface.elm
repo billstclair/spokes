@@ -13,6 +13,7 @@ module Spokes.Server.Interface exposing ( emptyServerState
                                         , makeProxyServer, makeServer, send
                                         , getServer
                                         , processServerMessage
+                                        , getGameList, setGameList
                                         )
 
 import Spokes.Server.EncodeDecode exposing ( encodeMessage )
@@ -328,6 +329,25 @@ appendGameList games players game =
     setGameList games players
         <| List.append (getGameList games players) [game]
 
+removeGameFromList : PublicGames -> String -> Int -> PublicGames
+removeGameFromList games gameid players =
+    let gameList = getGameList games players
+    in
+        setGameList games players
+            <| List.filter (\game -> game.gameid /= gameid) gameList
+
+addPlayerToPublicGame : PublicGames -> String -> Int -> String -> PublicGames
+addPlayerToPublicGame games gameid players name =
+    let gameList = getGameList games players
+    in
+        case LE.find (\game -> game.gameid == gameid) gameList of
+            Nothing ->
+                games
+            Just game ->
+                setGameList games players
+                    <| { game | playerNames = name :: game.playerNames }
+                        :: (List.filter (\game -> game.gameid /= gameid) gameList)
+
 maximumPublicGames : Int
 maximumPublicGames =
     10
@@ -374,6 +394,15 @@ newReqInternal state message players name isPublic =
                   , playerInfoDict =
                       Dict.insert playerid playerInfo
                           state.playerInfoDict
+                  , publicGames =
+                    if isPublic then
+                        appendGameList state.publicGames players
+                            <| { gameid = gameid
+                               , players = players
+                               , playerNames = [name]
+                               }
+                    else
+                        state.publicGames                        
               }                        
         msg = NewRsp { gameid = gameid
                      , playerid = playerid
@@ -490,6 +519,12 @@ updateGameState : ServerState -> (GameState, Message) -> (ServerState, Message)
 updateGameState state (gameState, message) =
     ( { state
           | gameDict = Dict.insert gameState.gameid gameState state.gameDict
+          , publicGames =
+              case message of
+                  GameOverRsp { gameid } ->
+                      removeGameFromList state.publicGames gameid gameState.players
+                  _ ->
+                      state.publicGames
       }
     , message
     )
@@ -498,9 +533,10 @@ joinReq : ServerState -> GameState -> Message -> String -> String -> (ServerStat
 joinReq state gameState message gameid name =
     let player = gameState.resolver
         playerid = toString player --temporary in real server
-        joinDone = (player == gameState.players)
+        players = gameState.players
+        joinDone = (player == players)
         msg = JoinRsp { gameid = gameid
-                      , players = gameState.players
+                      , players = players
                       , name = name
                       , playerid = Just playerid
                       , number = player
@@ -540,6 +576,12 @@ joinReq state gameState message gameid name =
                                 )
                           )
                           state.playeridDict
+                  , publicGames =
+                      if joinDone then
+                          removeGameFromList state.publicGames gameid players
+                      else
+                          addPlayerToPublicGame
+                              state.publicGames gameid players name
               }
     in
         -- The non-proxy server will generate a new playerid

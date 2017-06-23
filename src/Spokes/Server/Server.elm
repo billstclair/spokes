@@ -3,9 +3,10 @@ port module Server exposing (..)
 import Spokes.Server.EncodeDecode exposing ( encodeMessage, decodeMessage )
 import Spokes.Server.Interface exposing ( emptyServerState, send
                                         , processServerMessage
+                                        , getGameList, setGameList
                                         )
 import Spokes.Server.Error exposing ( ServerError(..), errnum )
-import Spokes.Types exposing ( Message(..), ServerState )
+import Spokes.Types exposing ( Message(..), ServerState, PublicGames )
 
 import Platform exposing ( Program )
 import Json.Decode as Decode exposing ( Decoder )
@@ -15,6 +16,7 @@ import Time exposing ( Time )
 import Random exposing ( Seed, Generator ) 
 import Char
 import Dict exposing ( Dict )
+import List.Extra as LE
 import Debug exposing ( log )
 import WebSocketServer as WSS exposing ( Socket, sendToOne, sendToMany )
 
@@ -196,6 +198,18 @@ socketMessage model socket request =
             in
                 processResponse model socket state response
 
+updatePublicGameId : PublicGames -> Int -> String -> String -> PublicGames
+updatePublicGameId games players gameid gid =
+    let gameList = getGameList games players
+    in
+        case LE.find (\game -> game.gameid == gameid) gameList of
+            Nothing ->
+                games
+            Just game ->
+                setGameList games players
+                    <| { game | gameid = gid }
+                        :: (List.filter (\game -> game.gameid /= gameid) gameList)
+
 processResponse : Model -> Socket -> ServerState -> Message -> (Model, Cmd Msg)
 processResponse model socket state response =
     case response of
@@ -227,6 +241,9 @@ processResponse model socket state response =
                                                  playerInfoDict
                                          , playeridDict =
                                              Dict.insert gid [pid] playeridDict
+                                         , publicGames =
+                                             updatePublicGameId state.publicGames
+                                                 gs.players gameid gid
                                      }
                 model5 = { model4
                              | state = state2

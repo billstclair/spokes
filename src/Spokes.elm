@@ -79,6 +79,7 @@ type alias Model =
     , resolver : Int
     , selectedPile : Maybe StonePile
     , server : ServerInterface Msg
+    , localServer : Maybe (ServerInterface Msg)
     , gameid : String
     , placeOnly : Bool
     , playerNumber : Int
@@ -122,12 +123,13 @@ initialModel =
     , resolver = 1
     , selectedPile = Nothing
     , server = makeProxyServer ServerResponse
+    , localServer = Nothing
     , gameid = ""
     , placeOnly = False
     , playerNumber = 1
     , playerid = ""
     , serverUrl = "ws://localhost:8080"
-    , isLocal = False
+    , isLocal = True
     , newIsLocal = False
     , isPublic = False
     , name = "Player 1"
@@ -167,18 +169,8 @@ init =
                     <| Http.getString "server.txt"
     in
         ( initialModel
-        , if initialModel.isLocal then
-              Cmd.batch
-                  [ getString
-                  , send initialModel initialModel.server
-                      <| NewReq { players = initialModel.players
-                                , name = initialModel.name
-                                , isPublic = False
-                                }
-                  ]
-      else
-          getString
-    )
+        , getString
+        )
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -232,12 +224,25 @@ update msg model =
                     , Cmd.none
                     )                    
         SetPage page ->
-            ( { model | page = page }
-            , if page == PublicPage then
-                  send model model.server GamesReq
-              else
-                  Cmd.none
-            )
+            if page == PublicPage then
+                switchToPublicPage model
+            else
+                let m2 = { model | page = page }
+                in
+                    ( if model.page == PublicPage then
+                          case model.localServer of
+                              Nothing ->
+                                  m2
+                              Just server ->
+                                  { m2
+                                      | server = server
+                                      , isLocal = True
+                                      , localServer = Nothing
+                                  }
+                      else
+                          m2
+                    , Cmd.none
+                    )
         SetPlayers players ->
             ( { model | newPlayers = players }
             , Cmd.none
@@ -268,6 +273,7 @@ update msg model =
             )
         NewGame ->
             let isLocal = model.newIsLocal
+                isPublic = model.isPublic
                 server = if isLocal then
                              initialModel.server
                          else
@@ -280,6 +286,7 @@ update msg model =
                       , name = model.name
                       , isLocal = isLocal
                       , newIsLocal = isLocal
+                      , isPublic = isPublic
                       , server = server
                       , serverUrl = model.serverUrl
                       , gameid = ""
@@ -288,7 +295,7 @@ update msg model =
                 , send model server
                     <| NewReq { players = players
                               , name = initialPlayerName 1 model
-                              , isPublic = model.isPublic
+                              , isPublic = isPublic
                               }
                 )
         JoinGame ->
@@ -465,6 +472,24 @@ placeOnlyClick model nodeName =
                                             Placement model.inputColor nodeName
                                         }
                         )
+
+switchToPublicPage : Model -> (Model, Cmd Msg)
+switchToPublicPage model =
+    if model.page == PublicPage || (not model.isLocal) then
+        ( { model | page = PublicPage }
+        , send model model.server GamesReq
+        )
+    else
+        let m2 = { model
+                     | page = PublicPage
+                     , localServer = Just model.server
+                     , isLocal = False
+                     , server = makeServer model.serverUrl Noop
+                 }
+        in
+            ( m2
+            , send m2 m2.server GamesReq
+            )
 
 addChat : Model -> String -> (Model, Cmd Msg)
 addChat model message =
@@ -1185,7 +1210,7 @@ renderGamePage model =
                                      , disabled nostart
                                      ]
                                    []
-                             , text "global "
+                             , text "public "
                              ]
                    , button [ onClick <| if nostart then ResignGame else NewGame
                             ]
