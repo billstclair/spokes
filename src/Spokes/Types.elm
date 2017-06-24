@@ -45,6 +45,7 @@ type Msg
     | SetPlaceOnly Bool
     | NewGame
     | JoinGame
+    | JoinPublicGame String
     | ResignGame
     | SetInput Int String
     | Place
@@ -53,6 +54,7 @@ type Msg
     | Focus Int
     | SetInputColor Color
     | SetPage Page
+    | RefreshPublicGames
     | Undo
     | ServerResponse (ServerInterface Msg) Message
     | WebSocketMessage String

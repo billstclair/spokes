@@ -345,7 +345,10 @@ addPlayerToPublicGame games gameid players name =
                 games
             Just game ->
                 setGameList games players
-                    <| { game | playerNames = name :: game.playerNames }
+                    <| { game
+                           | playerNames =
+                               List.append game.playerNames [name]
+                       }
                         :: (List.filter (\game -> game.gameid /= gameid) gameList)
 
 maximumPublicGames : Int

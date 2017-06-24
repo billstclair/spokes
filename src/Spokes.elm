@@ -27,7 +27,8 @@ import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , placementText, colorLetter
                                       )
 import Spokes.Server.EncodeDecode exposing ( decodeMessage )
-import Spokes.Server.Interface as Interface exposing ( makeProxyServer, makeServer )
+import Spokes.Server.Interface as Interface exposing
+    ( makeProxyServer, makeServer )
 
 import Html exposing ( Html, Attribute
                      , div, text, span, p, h2, h3, a, node
@@ -227,22 +228,11 @@ update msg model =
             if page == PublicPage then
                 switchToPublicPage model
             else
-                let m2 = { model | page = page }
-                in
-                    ( if model.page == PublicPage then
-                          case model.localServer of
-                              Nothing ->
-                                  m2
-                              Just server ->
-                                  { m2
-                                      | server = server
-                                      , isLocal = True
-                                      , localServer = Nothing
-                                  }
-                      else
-                          m2
-                    , Cmd.none
-                    )
+                switchFromPublicPage model page
+        RefreshPublicGames ->
+            ( model
+            , send model model.server GamesReq
+            )
         SetPlayers players ->
             ( { model | newPlayers = players }
             , Cmd.none
@@ -298,33 +288,16 @@ update msg model =
                               , isPublic = isPublic
                               }
                 )
+        JoinPublicGame gameid ->
+            -- Uses the existing server, which was queried for the games list.
+            joinGame { model
+                         | localServer = Nothing
+                         , newIsLocal = False
+                         , serverUrl = Interface.getServer model.server
+                     }
+                gameid
         JoinGame ->
-            let isLocal = model.newIsLocal
-                server = if isLocal then
-                             initialModel.server
-                         else
-                             makeServer model.serverUrl Noop
-                gameid = model.newGameid
-            in
-                if gameid == model.gameid then
-                    ( model
-                    , Cmd.none
-                    )
-                else
-                    ( { initialModel
-                          | name = model.name
-                          , isLocal = isLocal
-                          , newIsLocal = isLocal
-                          , server = server
-                          , gameid = gameid
-                          , newGameid = gameid
-                          , serverUrl = model.serverUrl
-                      }
-                    , send model server
-                        <| JoinReq { gameid = gameid
-                                   , name = model.name
-                                   }
-                    )
+            joinGame model model.newGameid
         ResignGame ->
             ( { model
                   | phase = if model.players == 2 then
@@ -450,6 +423,34 @@ update msg model =
                     , Cmd.none
                     )
 
+joinGame : Model -> String -> (Model, Cmd Msg)
+joinGame model gameid =
+    let isLocal = model.newIsLocal
+        server = if isLocal then
+                     initialModel.server
+                 else
+                     makeServer model.serverUrl Noop
+    in
+        if gameid == model.gameid then
+            ( model
+            , Cmd.none
+            )
+        else
+            ( { initialModel
+                  | name = model.name
+                  , isLocal = isLocal
+                  , newIsLocal = isLocal
+                  , server = server
+                  , gameid = gameid
+                  , newGameid = gameid
+                  , serverUrl = model.serverUrl
+              }
+            , send model server
+                <| JoinReq { gameid = gameid
+                           , name = model.name
+                           }
+            )
+
 placeOnlyClick : Model -> String -> (Model, Cmd Msg)
 placeOnlyClick model nodeName =
     if not <| isPlaying model then
@@ -475,21 +476,38 @@ placeOnlyClick model nodeName =
 
 switchToPublicPage : Model -> (Model, Cmd Msg)
 switchToPublicPage model =
-    if model.page == PublicPage || (not model.isLocal) then
-        ( { model | page = PublicPage }
-        , send model model.server GamesReq
-        )
-    else
-        let m2 = { model
+    let m2 = if model.page == PublicPage || (not model.isLocal) then
+                 { model | page = PublicPage }
+             else
+                 { model
                      | page = PublicPage
                      , localServer = Just model.server
                      , isLocal = False
                      , server = makeServer model.serverUrl Noop
                  }
-        in
-            ( m2
-            , send m2 m2.server GamesReq
-            )
+    in
+        ( m2
+        , send m2 m2.server GamesReq
+        )
+
+switchFromPublicPage : Model -> Page -> (Model, Cmd Msg)
+switchFromPublicPage model page =
+    let m2 = { model | page = page }
+    in
+        ( if model.page == PublicPage then
+              case model.localServer of
+                  Nothing ->
+                      m2
+                  Just server ->
+                      { m2
+                          | server = server
+                          , isLocal = True
+                          , localServer = Nothing
+                      }
+          else
+              m2
+        , Cmd.none
+        )
 
 addChat : Model -> String -> (Model, Cmd Msg)
 addChat model message =
@@ -723,6 +741,10 @@ serverResponse mod server message =
                           }
                         , Cmd.none
                         )
+            GamesRsp games ->
+                ( { model | publicGames = games }
+                , Cmd.none
+                )
             UndoRsp record ->
                 case record.message of
                     PlacedRsp { placements } ->
@@ -1125,8 +1147,7 @@ iframe url =
 renderIframePage : Model -> String -> Html Msg
 renderIframePage model url =
     div []
-        [ pageLinks model.page
-        , playButton
+        [ playButton
         , iframe url
         , playButton
         ]
@@ -1290,6 +1311,7 @@ chatParagraph model accessor =
               -- TODO: make player names bold.
               [ text <| accessor model ]
         , br
+        , b [ text "Chat: " ]
         , input [ type_ "text"
                 , onInput SetChatInput
                 , onKeydown ChatKeydown
@@ -1302,14 +1324,74 @@ chatParagraph model accessor =
             [ text "Send" ]
         ]
 
+renderGames : Model -> List PublicGame -> Bool -> String -> Html Msg
+renderGames model games nostart players =
+    p []
+        [ h3 [] [ text players
+                , text "-Player Games"
+                ]
+        , if games == [] then
+              text "No games"
+          else
+              table [ class "bordered" ]
+                  <| (tr []
+                          [ th [] [ text "Players" ]
+                          , th [] [ text "Join" ]
+                          ]
+                     ) ::
+                  (List.map (renderGameRow nostart) games)
+        ]
+
+renderGameRow : Bool -> PublicGame -> Html Msg
+renderGameRow nostart game =
+    tr []
+        [ td []
+              <| List.map (\name -> span [] [ text name, br ]) game.playerNames
+        , td []
+            [ button [ onClick <| JoinPublicGame game.gameid
+                     , disabled nostart
+                     ]
+                  [ text "Join" ]
+            ]
+        ]
+
 renderPublicPage : Model -> Html Msg
 renderPublicPage model =
-    div []
-        [ pageLinks model.page
-        , playButton
-        , text "Public page coming soon."
-        , playButton
-        ]
+    let games = model.publicGames
+        nostart = isPlaying model
+    in
+        div []
+            [ playButton
+            , p []
+                [ b [ text "Name: " ]
+                , input [ type_ "text"
+                        , onInput SetName
+                        , disabled nostart
+                        , size 30
+                        , value model.name
+                        ]
+                      []
+                , text " "
+                , button [ onClick RefreshPublicGames ] [ text "Refresh" ]
+                ]
+            , let twoPlayer = games.twoPlayer
+                  fourPlayer = games.fourPlayer
+              in
+                  if twoPlayer == [] && fourPlayer == [] then
+                      p [] [ b [ text "There are no public games." ] ]
+                  else
+                      div []
+                          [ if twoPlayer == [] then
+                                text ""
+                            else
+                                renderGames model twoPlayer nostart "Two"
+                          , if fourPlayer == [] then
+                                text ""
+                            else
+                                renderGames model fourPlayer nostart "Four"
+                          ]
+            , playButton
+            ]
 
 pages : List (Page, String)
 pages =
@@ -1342,6 +1424,7 @@ view model =
         [ style_ [ type_ "text/css"]
               [ text "@import \"style.css\"" ]
         , h2 [] [ text "Spokes" ]
+        , p [] [ pageLinks model.page ]
         , case model.page of
               GamePage ->
                   renderGamePage model
