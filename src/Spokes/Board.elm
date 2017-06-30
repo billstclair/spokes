@@ -1504,10 +1504,11 @@ boardToString board =
 boardNodeNames : List String
 boardNodeNames =
     Dict.foldl (\name node res ->
-                    node.name :: res
+                    name :: res
                )
                [] initialBoard
 
+-- Totally ignoring the "[<ws>,<bs>]" encoding. It never happens.
 stoneCounts : String -> (Int, Int)
 stoneCounts str =
     case String.toInt (String.left 1 str) of
@@ -1530,15 +1531,15 @@ stringToBoard string =
                         case names of
                             [] ->
                                 board
-                            name :: morename ->
+                            name :: morenames ->
                                 case getNode name board of
                                     Nothing ->
-                                        board
+                                        loop (String.dropLeft 2 str) morenames board
                                     Just node ->
                                         let (w,b) = stoneCounts <| String.left 2 str
                                         in
                                             loop (String.dropLeft 2 str)
-                                                morename
+                                                morenames
                                                 <| setNode name
                                                     { node
                                                         | whiteStones = w
