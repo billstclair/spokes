@@ -14,8 +14,10 @@ module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , parsePlacementMove, placementText, colorLetter
                              , isLegalMove, isLegalPlacement, makeMove, undoMove
                              , computeDisplayList, findResolution
-                             , canResolve, boardToString, makePlacements
+                             , canResolve, makePlacements
                              , isHomeCircleFull, findFullHomeCircle
+                             , stringToBoard, boardToString
+                             , encodedStringToBoard, boardToEncodedString
                              )
 
 import Spokes.Types as Types exposing ( Msg(..), Board, Node
@@ -1498,6 +1500,156 @@ boardToString board =
                [] board
     in
         String.concat list
+
+boardNodeNames : List String
+boardNodeNames =
+    Dict.foldl (\name node res ->
+                    node.name :: res
+               )
+               [] initialBoard
+
+stoneCounts : String -> (Int, Int)
+stoneCounts str =
+    case String.toInt (String.left 1 str) of
+        Err _ ->
+            (0, 0)
+        Ok w ->
+            case String.toInt (String.dropLeft 1 str) of
+                Err _ ->
+                    (w, 0)
+                Ok b ->
+                    (w, b)
+
+stringToBoard : String -> Board
+stringToBoard string =
+    let loop : String -> List String -> Board -> Board
+        loop = (\str names board ->
+                    if str == "" then
+                        board
+                    else
+                        case names of
+                            [] ->
+                                board
+                            name :: morename ->
+                                case getNode name board of
+                                    Nothing ->
+                                        board
+                                    Just node ->
+                                        let (w,b) = stoneCounts <| String.left 2 str
+                                        in
+                                            loop (String.dropLeft 2 str)
+                                                morename
+                                                <| setNode name
+                                                    { node
+                                                        | whiteStones = w
+                                                        , blackStones = b
+                                                    }
+                                                    board
+               )
+    in
+        loop string boardNodeNames initialBoard                            
+
+
+boardToEncodedString : Board -> String
+boardToEncodedString board =
+    runLengthEncode <| boardToString board
+
+encodedStringToBoard : String -> Board
+encodedStringToBoard string =
+    stringToBoard <| runLengthDecode string
+
+firstChar : String -> Char
+firstChar string =
+    case List.head <| String.toList string of
+        Nothing ->
+            '!'
+        Just c ->
+            c
+
+charString : String
+charString =
+    "0abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+maxCount : Int
+maxCount =
+    (String.length charString) - 1
+
+charStringChars : List Char
+charStringChars =
+    String.toList charString
+
+countToChar : Int -> Char
+countToChar cnt =
+    String.dropLeft cnt charString
+        |> firstChar
+
+charToCount : Char -> Int
+charToCount char =
+    case LE.elemIndex char charStringChars of
+        Nothing ->
+            0
+        Just idx ->
+            idx
+
+runLengthEncode : String -> String
+runLengthEncode string =
+    let loop : List Char -> Char -> Int -> List Char -> String
+        loop = (\tail last count res ->
+                    case tail of
+                        [] ->
+                            let res2 = if count == 0 then
+                                           res
+                                       else if count == 1 then
+                                           last :: res
+                                       else if count == 2 then
+                                           last :: last :: res
+                                       else
+                                           last :: (countToChar count) :: res
+                            in
+                                String.fromList <| List.reverse res2
+                        char :: rest ->
+                            if count == 0 then
+                                loop rest char 1 res
+                            else if char == last && count < maxCount then
+                                loop rest char (count + 1) res
+                            else if count <= 2 then
+                                let res2 = last :: res
+                                    res3 = if count == 1 then
+                                               res2
+                                           else
+                                               last :: res2
+                                in
+                                    loop rest char 1 res3
+                            else
+                                loop rest char 1
+                                    <| last :: (countToChar count) :: res
+               )
+    in
+        loop (String.toList string) 'a' 0 []
+
+runLengthDecode : String -> String
+runLengthDecode string =
+    let loop : List Char -> List String -> String
+        loop = (\tail res ->
+                    case tail of
+                        [] ->
+                            String.concat <| List.reverse res
+                        char :: rest ->
+                            case charToCount char of
+                                0 ->
+                                    loop rest <| (String.fromChar char) :: res
+                                cnt ->
+                                    case rest of
+                                        [] ->
+                                            loop [] res
+                                        chr :: more ->
+                                            let s = String.repeat
+                                                    cnt (String.fromChar chr)
+                                            in
+                                                loop more <| s :: res
+               )
+    in
+        loop (String.toList string) []
 
 type alias UnresolvedState =
     { boards : Set String
