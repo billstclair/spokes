@@ -10,6 +10,7 @@ import Spokes.Server.EncodeDecode as ED
 import Spokes.Types as Types exposing ( Move(..), Color(..), MovedStone(..)
                                       , Message(..), GameOverReason(..)
                                       )
+import Spokes.Board as Board exposing (encodedStringToBoard, boardToEncodedString)
 
 log = Debug.log
 
@@ -29,6 +30,7 @@ all =
     Test.concat <|
         List.concat
             [ (List.map protocolTest protocolData)
+            , (List.map boardTest boardData)
             ]
 
 expectResult : Result String Message -> Result String Message -> Expectation
@@ -183,4 +185,24 @@ protocolData =
     , ErrorRsp { request = "foo", id = 1, text = "Malformed request." }
     , ChatReq { playerid = "p1", text = "Hello, World!" }
     , ChatRsp { gameid = "asdf", text = "Hello, World!", number = 1 }
+    ]
+
+expectString : String -> String -> Expectation
+expectString sb was =
+    Expect.equal sb was
+
+boardTest : String -> Test
+boardTest encodedBoard =
+    test ("boardTest \"" ++ encodedBoard ++ "\"")
+        (\_ ->
+             let board = encodedStringToBoard encodedBoard
+             in
+                 expectString encodedBoard <| boardToEncodedString board
+        )
+
+boardData : List String
+boardData =
+    [ "Z0L0"
+    , "d0h1v01c01c01c01Q0"
+    , "d0x10011001c01c01c01l01c01c01c01e01c01c01c01"
     ]
