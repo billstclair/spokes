@@ -1585,7 +1585,7 @@ getPlayerName player prefix model =
 
 getPlayerNames : Model -> List String
 getPlayerNames model =
-    List.map Tuple.second model.playerNames
+    List.map Tuple.second <| List.sortBy (\(n,_) -> n) model.playerNames
 
 isResigned : Model -> Int -> Bool
 isResigned model number =
