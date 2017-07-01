@@ -213,7 +213,7 @@ updatePublicGameId games players gameid gid =
 processResponse : Model -> Socket -> ServerState -> Message -> (Model, Cmd Msg)
 processResponse model socket state response =
     case response of
-        (NewRsp { gameid, playerid, players, name }) ->
+        (NewRsp { gameid, playerid, players, name, restoreState }) ->
             let (model2, _) = disconnection model socket
                 (gid, model3) = newGameid model2
                 (pid, model4) = newPlayerid model3
@@ -256,12 +256,13 @@ processResponse model socket state response =
                                   , playerid = pid
                                   , players = players
                                   , name = name
+                                  , restoreState = restoreState
                                   }
             in
                 ( model5
                 , sendToOne response socket
                 )
-        JoinRsp { gameid, players, name, playerid, number } ->
+        JoinRsp { gameid, players, name, playerid, number, restoreState } ->
              let (model2, _) = disconnection model socket
                  (pid, model3) = newPlayerid model2
                  playerInfo = { gameid = gameid
@@ -306,12 +307,14 @@ processResponse model socket state response =
                                , name = name
                                , playerid = Just pid
                                , number = number
+                               , restoreState = restoreState
                                }
                  rsp2 = JoinRsp { gameid = gameid
                                 , players = players
                                 , name = name
                                 , playerid = Nothing
                                 , number = number
+                                , restoreState = Nothing
                                 }
                  oldJoins = List.concatMap
                             (\pid -> case Dict.get pid st2.playerInfoDict of
@@ -323,6 +326,7 @@ processResponse model socket state response =
                                                        , name = name
                                                        , playerid = Nothing
                                                        , number = number
+                                                       , restoreState = Nothing
                                                        }
                                              ]
                             )

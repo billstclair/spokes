@@ -257,18 +257,25 @@ emptyPublicGames = { twoPlayer = []
 type Message
     = RawMessage String String (List (String, String))
     -- Basic game play
-    | NewReq { players : Int, name : String, isPublic : Bool }
+    | NewReq { players : Int
+             , name : String
+             , isPublic : Bool
+             , restoreState : Maybe RestoreState
+             }
     | NewRsp { gameid : String
              , players : Int
              , name : String
              , playerid : String
+             , restoreState : Maybe RestoreState
              }
     | JoinReq { gameid : String, name : String }
     | JoinRsp { gameid : String
               , players : Int
               , name : String
               , playerid: Maybe String
-              , number : Int }
+              , number : Int
+              , restoreState : Maybe RestoreState
+              }
     | PlaceReq { playerid : String, placement : Move }
     | PlaceRsp { gameid : String, number : Int }
     | PlacedRsp { gameid : String, placements : List Move }

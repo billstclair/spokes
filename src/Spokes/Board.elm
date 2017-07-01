@@ -1630,27 +1630,36 @@ runLengthEncode string =
 
 runLengthDecode : String -> String
 runLengthDecode string =
-    let loop : List Char -> List String -> String
-        loop = (\tail res ->
-                    case tail of
-                        [] ->
-                            String.concat <| List.reverse res
-                        char :: rest ->
-                            case charToCount char of
-                                0 ->
-                                    loop rest <| (String.fromChar char) :: res
-                                cnt ->
-                                    case rest of
-                                        [] ->
-                                            loop [] res
-                                        chr :: more ->
-                                            let s = String.repeat
-                                                    cnt (String.fromChar chr)
-                                            in
-                                                loop more <| s :: res
+    runLengthDecodeInternal string 90
+
+runLengthDecodeInternal : String -> Int -> String
+runLengthDecodeInternal string maxLength =
+    let loop : List Char -> Int -> List String -> String
+        loop = (\tail length res ->
+                    if length >= maxLength then
+                        String.concat <| List.reverse res
+                    else
+                        case tail of
+                            [] ->
+                                String.concat <| List.reverse res
+                            char :: rest ->
+                                case charToCount char of
+                                    0 ->
+                                        loop rest (length+1)
+                                            <| (String.fromChar char) :: res
+                                    cnt ->
+                                        case rest of
+                                            [] ->
+                                                loop [] length res
+                                            chr :: more ->
+                                                let c = min cnt (maxLength - cnt)
+                                                    s = String.repeat
+                                                        c (String.fromChar chr)
+                                                in
+                                                    loop more (length+c) <| s :: res
                )
     in
-        loop (String.toList string) []
+        loop (String.toList string) 0 []
 
 type alias UnresolvedState =
     { boards : Set String

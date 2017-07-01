@@ -445,6 +445,7 @@ newReqInternal state message players name isPublic =
                      , playerid = playerid
                      , players = players
                      , name = name
+                     , restoreState = Nothing
                      }
     in
         -- The non-proxy server will generate new gameid and playerid
@@ -577,6 +578,7 @@ joinReq state gameState message gameid name =
                       , name = name
                       , playerid = Just playerid
                       , number = player
+                      , restoreState = Nothing
                       }
         gs2 = { gameState
                   | resolver = if joinDone then

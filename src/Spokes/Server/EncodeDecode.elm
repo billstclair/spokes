@@ -312,7 +312,7 @@ parseRequest : String -> MessageParams -> Message -> Message
 parseRequest msg params rawMessage =
     case msg of
         "new" ->
-            let { players, name, isPublic } = params
+            let { players, name, isPublic, restoreState } = params
                 p = case players of
                         Nothing -> 2
                         Just ps -> ps
@@ -324,6 +324,7 @@ parseRequest msg params rawMessage =
                         NewReq { players = p
                                , name = n
                                , isPublic = isPublic
+                               , restoreState = restoreState
                                }
         "join" ->
             let { gameid, name } = params
@@ -408,7 +409,7 @@ parseResponse : String -> MessageParams -> Message -> Message
 parseResponse msg params rawMessage =
     case msg of
         "new" ->
-            let { gameid, playerid, players, name } = params
+            let { gameid, playerid, players, name, restoreState } = params
             in
                 case allStrings [gameid, playerid, name] of
                     Just [gid, pid, n] ->
@@ -420,11 +421,12 @@ parseResponse msg params rawMessage =
                                        , playerid = pid
                                        , players = p
                                        , name = n
+                                       , restoreState = restoreState
                                        }
                     _ ->
                         rawMessage
         "join" ->
-            let { gameid, players, name, playerid, number } = params
+            let { gameid, players, name, playerid, number, restoreState } = params
             in
                 case number of
                     Nothing ->
@@ -441,6 +443,7 @@ parseResponse msg params rawMessage =
                                                 , name = n
                                                 , playerid = playerid
                                                 , number = num
+                                                , restoreState = restoreState
                                                 }
                             _ ->
                                 rawMessage
@@ -660,27 +663,42 @@ messageEncoder message =
         RawMessage typ msg plist ->
             messageValue typ msg plist
         -- Basic game play
-        NewReq { players, name, isPublic } ->
+        NewReq { players, name, isPublic, restoreState } ->
             let isPublicPairs =
                     if isPublic then
                         [ ("isPublic", "true") ]
                     else
                         []
+                rsPairs = case restoreState of
+                              Nothing ->
+                                  []
+                              Just rs ->
+                                  [ ("restoreState", encodeRestoreState rs) ]
             in
                 messageValue "req" "new"
-                    <| List.append [ ("players", toString players)
-                                   , ("name", name)
-                                   ]
-                        isPublicPairs
-        NewRsp { gameid, playerid, players, name } ->
-            messageValue "rsp" "new" [ ("gameid", gameid)
-                                     , ("playerid", playerid)
-                                     , ("players", toString players)
-                                     , ("name", name)
-                                     ]
+                    <| List.concat
+                        [ [ ("players", toString players)
+                          , ("name", name)
+                          ]
+                        , isPublicPairs
+                        , rsPairs
+                        ]
+        NewRsp { gameid, playerid, players, name, restoreState } ->
+            messageValue "rsp" "new"
+                <| List.concat [ [ ("gameid", gameid)
+                                 , ("playerid", playerid)
+                                 , ("players", toString players)
+                                 , ("name", name)
+                                 ]
+                               , case restoreState of
+                                     Nothing ->
+                                         []
+                                     Just rs ->
+                                         [ ("restoreState", encodeRestoreState rs) ]
+                               ]
         JoinReq { gameid, name } ->
             messageValue "req" "join" [("gameid", gameid), ("name", name)]
-        JoinRsp { gameid, players, name, playerid, number } ->
+        JoinRsp { gameid, players, name, playerid, number, restoreState } ->
             messageValue "rsp" "join"
                 <| List.concat
                     [ [ ("gameid", gameid)
@@ -691,6 +709,9 @@ messageEncoder message =
                           Nothing -> []
                           Just pid -> [ ("playerid", pid) ]
                     , [ ("number", toString number) ]
+                    , case restoreState of
+                          Nothing -> []
+                          Just rs -> [ ("restoreState", encodeRestoreState rs) ]
                     ]
         PlaceReq { playerid, placement } ->
             messageValue "req" "place" [ ("playerid", playerid)

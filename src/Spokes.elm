@@ -286,6 +286,7 @@ update msg model =
                     <| NewReq { players = players
                               , name = initialPlayerName 1 model
                               , isPublic = isPublic
+                              , restoreState = Nothing
                               }
                 )
         JoinPublicGame gameid ->

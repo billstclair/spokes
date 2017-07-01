@@ -59,15 +59,43 @@ protocolTest message =
 protocolData : List Message
 protocolData =
     [ RawMessage "foo" "bar" [("bletch", "gronk"), ("1", "2")]
-    , NewReq { players = 2, name = "Fred", isPublic = False }
-    , NewReq { players = 4, name = "Bob", isPublic = True }
-    , NewRsp { gameid = "asdf", playerid = "p1", players = 4, name = "John" }
+    , NewReq { players = 2, name = "Fred", isPublic = False
+             , restoreState = Nothing }
+    , NewReq { players = 4, name = "Bob", isPublic = True
+             , restoreState = Nothing
+             }
+    , NewReq { players = 4, name = "Bob", isPublic = False
+             , restoreState = Just { board = "board"
+                                   , players = [ "Bill", "Chris" ]
+                                   , resolver = 1
+                                   }
+             }
+    , NewRsp { gameid = "asdf", playerid = "p1", players = 4, name = "John"
+             , restoreState = Nothing
+             }
+    , NewRsp { gameid = "asdf", playerid = "p2", players = 4, name = "George"
+             , restoreState = Just { board = "board"
+                                   , players = [ "Bill", "Chris" ]
+                                   , resolver = 1
+                                   }
+             }
     , JoinReq { gameid = "asdf", name = "bill" }
     , JoinRsp { gameid = "asdf"
               , players = 2
               , name = "bill"
               , playerid = Just "p1"
               , number = 1
+              , restoreState = Nothing
+              }
+    , JoinRsp { gameid = "asdf"
+              , players = 2
+              , name = "Chris"
+              , playerid = Just "p2"
+              , number = 2
+              , restoreState = Just { board = "board"
+                                    , players = [ "Bill", "Chris" ]
+                                    , resolver = 1
+                                    }
               }
     , PlaceReq { playerid = "p1", placement = Placement White "C1" }
     , PlaceReq { playerid = "p2", placement = Placement Black "D1" }
