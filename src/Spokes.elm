@@ -26,7 +26,9 @@ import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , computeDisplayList, findResolution
                                       , placementText, colorLetter
                                       )
-import Spokes.Server.EncodeDecode exposing ( decodeMessage, encodeRestoreState )
+import Spokes.Server.EncodeDecode exposing ( decodeMessage
+                                           , encodeRestoreState, decodeRestoreState
+                                           )
 import Spokes.Server.Interface as Interface exposing
     ( makeProxyServer, makeServer )
 
@@ -83,6 +85,7 @@ type alias Model =
     , localServer : Maybe (ServerInterface Msg)
     , gameid : String
     , placeOnly : Bool
+    , restoreState : String
     , playerNumber : Int
     , playerid : String
     , serverUrl : String
@@ -127,6 +130,7 @@ initialModel =
     , localServer = Nothing
     , gameid = ""
     , placeOnly = False
+    , restoreState = ""
     , playerNumber = 1
     , playerid = ""
     , serverUrl = "ws://localhost:8080"
@@ -261,34 +265,24 @@ update msg model =
             ( { model | placeOnly = placeOnly }
             , Cmd.none
             )
+        SetRestoreState restoreState ->
+            ( { model | restoreState = restoreState }
+            , Cmd.none
+            )
         NewGame ->
-            let isLocal = model.newIsLocal
-                isPublic = model.isPublic
-                server = if isLocal then
-                             initialModel.server
-                         else
-                             makeServer model.serverUrl Noop
-                players = model.newPlayers
-            in                             
-                ( { initialModel
-                      | players = players
-                      , newPlayers = players
-                      , name = model.name
-                      , isLocal = isLocal
-                      , newIsLocal = isLocal
-                      , isPublic = isPublic
-                      , server = server
-                      , serverUrl = model.serverUrl
-                      , gameid = ""
-                      , newGameid = ""
-                  }
-                , send model server
-                    <| NewReq { players = players
-                              , name = initialPlayerName 1 model
-                              , isPublic = isPublic
-                              , restoreState = Nothing
-                              }
-                )
+            newGame model Nothing
+        RestoreGame ->
+            case decodeRestoreState (log "restoreState" model.restoreState) of
+                Err _ ->
+                    addChat model "Malformed restore string."
+                Ok state ->
+                    let players = List.length state.players
+                    in
+                        if players /= 2 && players /= 4 then
+                            addChat model "Malformed restore string."
+                        else
+                            newGame { model | newPlayers = players }
+                                <| Just state
         JoinPublicGame gameid ->
             -- Uses the existing server, which was queried for the games list.
             joinGame { model
@@ -424,6 +418,42 @@ update msg model =
                     , Cmd.none
                     )
 
+newGame : Model -> Maybe RestoreState -> (Model, Cmd Msg)
+newGame model restoreState =
+    let isLocal = model.newIsLocal
+        isPublic = model.isPublic
+        server = if isLocal then
+                     initialModel.server
+                 else
+                     makeServer model.serverUrl Noop
+        players = model.newPlayers
+        (board, displayList, resolver) =
+            processRestoreState model restoreState
+    in                             
+        ( { initialModel
+              | board = board
+              , displayList = displayList
+              , resolver = resolver
+              , restoreState = model.restoreState
+              , players = players
+              , newPlayers = players
+              , name = model.name
+              , isLocal = isLocal
+              , newIsLocal = isLocal
+              , isPublic = isPublic
+              , server = server
+              , serverUrl = model.serverUrl
+              , gameid = ""
+              , newGameid = ""
+          }
+        , send model server
+            <| NewReq { players = players
+                      , name = initialPlayerName 1 model
+                      , isPublic = isPublic
+                      , restoreState = restoreState
+                      }
+        )
+
 joinGame : Model -> String -> (Model, Cmd Msg)
 joinGame model gameid =
     let isLocal = model.newIsLocal
@@ -438,7 +468,8 @@ joinGame model gameid =
             )
         else
             ( { initialModel
-                  | name = model.name
+                  | restoreState = model.restoreState
+                  , name = model.name
                   , isLocal = isLocal
                   , newIsLocal = isLocal
                   , server = server
@@ -566,17 +597,23 @@ serverResponse mod server message =
                 let name = getPlayerName number "Player " model
                 in
                     addChat model <| name ++ ": " ++ text
-            NewRsp { gameid, playerid, name } ->
-                ( { model
-                      | gameid = gameid
-                      , newGameid = if model.isLocal then
-                                        model.newGameid
-                                    else
-                                        gameid
-                      , phase = JoinPhase
-                      , playerid = playerid
-                      , playerNames = [(1, name)]
-                  }
+            NewRsp { gameid, playerid, name, restoreState } ->
+                ( let (board, displayList, resolver) =
+                          processRestoreState model restoreState
+                  in
+                      { model
+                          | gameid = gameid
+                          , board = board
+                          , displayList = displayList
+                          , resolver = resolver
+                          , newGameid = if model.isLocal then
+                                            model.newGameid
+                                        else
+                                            gameid
+                          , phase = JoinPhase
+                          , playerid = playerid
+                          , playerNames = [(1, name)]
+                      }
                 , if model.isLocal then
                       send model server
                           <| JoinReq { gameid = gameid
@@ -585,7 +622,7 @@ serverResponse mod server message =
                   else
                       Cmd.none
                 )
-            JoinRsp { gameid, players, name, playerid, number } ->
+            JoinRsp { gameid, players, name, playerid, number, restoreState } ->
                 let done = number >= players
                     cmd = if (not done) && model.isLocal then
                               send model server
@@ -610,8 +647,13 @@ serverResponse mod server message =
                                   else
                                       number
                                 )
+                    (board, displayList, resolver) =
+                        processRestoreState model restoreState
                     model2 = { model
-                                 | players = players
+                                 | board = board
+                                 , displayList = displayList
+                                 , resolver = resolver
+                                 , players = players
                                  , newPlayers = players
                                  , playerNames = playerNames
                                  , playerid = pid
@@ -621,9 +663,11 @@ serverResponse mod server message =
                 in
                 ( if done then
                       { model2
-                          | phase = PlacementPhase
+                          | phase = if displayList.unresolvedPiles == [] then
+                                        PlacementPhase
+                                    else
+                                        ResolutionPhase
                           , turn = 1
-                          , resolver = 1
                       }
                   else
                       { model2 | phase = JoinPhase }
@@ -737,6 +781,7 @@ serverResponse mod server message =
                                         adjoin p model.resignedPlayers
                                     _ ->
                                         model.resignedPlayers
+                              , restoreState = createRestoreState model
                               , phase = GameOverPhase reason
                               , newGameid = ""
                           }
@@ -821,6 +866,19 @@ serverResponse mod server message =
             _ ->
                 ( model
                 , Cmd.none
+                )
+
+processRestoreState : Model -> Maybe RestoreState -> (Board, DisplayList, Int)
+processRestoreState model restoreState =
+    case restoreState of
+        Nothing ->
+            (model.board, model.displayList, model.resolver)
+        Just rs ->
+            let board = Board.encodedStringToBoard rs.board
+            in
+                ( board
+                , computeDisplayList board model.renderInfo
+                , rs.resolver
                 )
 
 makeGameOverReasonMoves : Model -> ServerInterface Msg -> String -> List Move -> Model
@@ -1071,7 +1129,10 @@ gameOverReasonText model reason =
             UnresolvableReason _ ->
                 "Unresolvable."
             HomeCircleFullReason player _ ->
-                (pname player) ++ "'s home circle is full."
+                let name = pname player
+                    poss = if name == "YOU" then "YOUR" else name ++ "'s"
+                in
+                    poss ++ " home circle is full."
             TimeoutReason ->
                 "The server timed out."
             UnknownReason text ->
@@ -1286,39 +1347,34 @@ renderGamePage model =
                                else
                                    span []
                                        [ input [ type_ "text"
-                                               , onInput <| SetGameid
-                                               , disabled (nostart)
+                                               , onInput SetGameid
+                                               , disabled nostart
                                                , size 18
                                                , value model.newGameid
                                                ]
                                              []
                                        , text " "
                                        , button [ onClick JoinGame
-                                                , disabled (nostart)
+                                                , disabled nostart
                                                 ]
                                              [ text "Join Game" ]
                                        ]
                              ]
-                   , renderRestoreState model
+                   , br
+                   , input [ type_ "text"
+                           , onInput SetRestoreState
+                           , disabled nostart
+                           , size 60
+                           , value <| encodedRestoreState model nostart
+                           ]
+                         []
+                   , text " "
+                   , button [ onClick RestoreGame
+                            , disabled nostart
+                            ]
+                       [ text "Restore" ]
                    ]
             ]
-
-renderRestoreState : Model -> Html Msg
-renderRestoreState model =
-    case encodedRestoreState model of
-        Nothing ->
-            text ""
-        Just s ->
-            span []
-                [ br
-                , b [ text "Restore: " ]
-                , input [ type_ "text"
-                        , disabled True
-                        , size 60
-                        , value s
-                        ]
-                      []
-                ]
 
 chatParagraph : Model -> (Model -> String) -> Html Msg
 chatParagraph model accessor =
@@ -1654,24 +1710,16 @@ radio name_ value isChecked isDisabled msg =
         , text value
         ]
 
-isStarting : Model -> Bool
-isStarting model =
-    model.players /= List.length model.playerNames
-
-createRestoreState : Model -> Maybe RestoreState
+createRestoreState : Model -> String
 createRestoreState model =
-    if isStarting model then
-        Nothing
-    else
-        Just { board = Board.boardToEncodedString model.board
-             , players = getPlayerNames model
-             , resolver = model.resolver
-             }
+    encodeRestoreState { board = Board.boardToEncodedString model.board
+                       , players = getPlayerNames model
+                       , resolver = model.resolver
+                       }
 
-encodedRestoreState : Model -> Maybe String
-encodedRestoreState model =
-    case createRestoreState model of
-        Nothing ->
-            Nothing
-        Just restoreState ->
-            Just <| encodeRestoreState restoreState
+encodedRestoreState : Model -> Bool -> String
+encodedRestoreState model nostart =
+    if nostart && model.phase /= JoinPhase then
+        createRestoreState model
+    else
+        model.restoreState

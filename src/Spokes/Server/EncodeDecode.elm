@@ -843,4 +843,3 @@ restoreStateEncoder state =
 encodeRestoreState : RestoreState -> String
 encodeRestoreState state =
     JE.encode 0 <| restoreStateEncoder state
-

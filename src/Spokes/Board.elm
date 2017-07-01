@@ -1488,27 +1488,25 @@ nodeToString node =
             -- This shouldn't happen.
             -- In a real game, both ws & bs are in the range 0-4.
             -- But the representation doesn't have that limitation, so handle it.
-            "[" ++ ws ++ "," ++ bs ++ "]"
+            "00"
 
--- This depends on Dict.foldl calling the function in sorted-by-node-name order.
--- If a Dict were a hash table, it could depend on the order of insertion.
 boardToString : Board -> String
 boardToString board =
-    let list = Dict.foldl (\name node res ->
-                               (nodeToString node) :: res
+    let list = List.map (\name ->
+                             case getNode name board of
+                                 Nothing ->
+                                     "00"
+                                 Just node ->
+                                     nodeToString node
                           )
-               [] board
+               boardNodeNames
     in
         String.concat list
 
 boardNodeNames : List String
 boardNodeNames =
-    Dict.foldl (\name node res ->
-                    name :: res
-               )
-               [] initialBoard
+    List.map Tuple.first nodeConnections
 
--- Totally ignoring the "[<ws>,<bs>]" encoding. It never happens.
 stoneCounts : String -> (Int, Int)
 stoneCounts str =
     case String.toInt (String.left 1 str) of
@@ -1652,11 +1650,11 @@ runLengthDecodeInternal string maxLength =
                                             [] ->
                                                 loop [] length res
                                             chr :: more ->
-                                                let c = min cnt (maxLength - cnt)
-                                                    s = String.repeat
-                                                        c (String.fromChar chr)
+                                                let s = String.repeat
+                                                        cnt (String.fromChar chr)
                                                 in
-                                                    loop more (length+c) <| s :: res
+                                                    loop more (length+cnt)
+                                                        <| s :: res
                )
     in
         loop (String.toList string) 0 []

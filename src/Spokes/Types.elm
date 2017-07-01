@@ -44,7 +44,9 @@ type Msg
     | SetGameid String
     | SetServerUrl String
     | SetPlaceOnly Bool
+    | SetRestoreState String
     | NewGame
+    | RestoreGame
     | JoinGame
     | JoinPublicGame String
     | ResignGame
@@ -322,6 +324,7 @@ type alias ServerState =
 
 type alias GameState =
     { board : Board
+    , restoreState : Maybe RestoreState
     , renderInfo : RenderInfo
     , phase : ServerPhase
     , unresolvedPiles : List StonePile

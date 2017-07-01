@@ -30,7 +30,7 @@ import Spokes.Types as Types
 import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
                              , getNode, isLegalMove, makeMove, undoMove
                              , canResolve, findFullHomeCircle
-                             , boardToEncodedString
+                             , boardToEncodedString, encodedStringToBoard
                              )
 
 
@@ -56,6 +56,7 @@ dummyGameid =
 emptyGameState : GameState
 emptyGameState =
     { board = initialBoard
+    , restoreState = Nothing
     , renderInfo = renderInfo 600
     , phase = JoinPhase
     , unresolvedPiles = []
@@ -188,8 +189,8 @@ processServerMessage : ServerState -> Message -> (ServerState, Message)
 processServerMessage state message =
     case message of
         -- Basic game play
-        NewReq { players, name, isPublic } ->
-            newReq state message players name isPublic
+        NewReq { players, name, isPublic, restoreState } ->
+            newReq state message players name isPublic restoreState
         JoinReq { gameid, name } ->
             case checkGameid state message gameid JoinPhase of
                 Err err ->
@@ -389,8 +390,8 @@ maximumPublicGames : Int
 maximumPublicGames =
     10
 
-newReq : ServerState -> Message -> Int -> String -> Bool -> (ServerState, Message)
-newReq state message players name isPublic =
+newReq : ServerState -> Message -> Int -> String -> Bool -> Maybe RestoreState -> (ServerState, Message)
+newReq state message players name isPublic restoreState =
     if not (players == 2 || players == 4) then
         ( state
         , errorRsp message IllegalPlayerCountErr "Players must be 2 or 4"
@@ -405,15 +406,21 @@ newReq state message players name isPublic =
                         "There are already too many public games."
                     )
                 else
-                    newReqInternal state message players name isPublic
+                    newReqInternal state message players name isPublic restoreState
         else
-            newReqInternal state message players name isPublic
+            newReqInternal state message players name isPublic restoreState
 
-newReqInternal : ServerState -> Message -> Int -> String -> Bool -> (ServerState, Message)
-newReqInternal state message players name isPublic =
+newReqInternal : ServerState -> Message -> Int -> String -> Bool -> Maybe RestoreState -> (ServerState, Message)
+newReqInternal state message players name isPublic restoreState =
     let info = emptyGameState.renderInfo
         gameState = { emptyGameState
-                        | players = players
+                        | board = case restoreState of
+                                      Nothing ->
+                                          initialBoard
+                                      Just { board } ->
+                                          encodedStringToBoard board
+                        , restoreState = restoreState
+                        , players = players
                         , renderInfo = { info | players = Just players }
                         , resolver = 2 --auto-join
                     }
@@ -445,7 +452,7 @@ newReqInternal state message players name isPublic =
                      , playerid = playerid
                      , players = players
                      , name = name
-                     , restoreState = Nothing
+                     , restoreState = restoreState
                      }
     in
         -- The non-proxy server will generate new gameid and playerid
@@ -573,25 +580,43 @@ joinReq state gameState message gameid name =
         playerid = toString player --temporary in real server
         players = gameState.players
         joinDone = (player == players)
+        restoreState = gameState.restoreState
+        unresolvedPiles = if not joinDone then
+                              []
+                          else
+                              case restoreState of
+                                  Nothing ->
+                                      []
+                                  Just rs ->
+                                      .unresolvedPiles
+                                      <| computeDisplayList
+                                          gameState.board gameState.renderInfo
         msg = JoinRsp { gameid = gameid
                       , players = players
                       , name = name
                       , playerid = Just playerid
                       , number = player
-                      , restoreState = Nothing
+                      , restoreState = restoreState
                       }
         gs2 = { gameState
                   | resolver = if joinDone then
                                    1
                                else
                                    player + 1
-                  , phase = if joinDone then
+                  , unresolvedPiles = unresolvedPiles
+                  , phase = if not joinDone then
+                                JoinPhase
+                            else if unresolvedPiles == [] then
                                 PlacementPhase
                             else
-                                JoinPhase
+                                ResolutionPhase
                   , history = if joinDone then
                                   [ { number = 1
-                                    , resolver = 1
+                                    , resolver = case restoreState of
+                                                     Nothing ->
+                                                         1
+                                                     Just rs ->
+                                                         rs.resolver
                                     , placements = []
                                     , resolutions = []
                                     }

@@ -55,6 +55,14 @@ During a "remote" game, you can chat with the other players by typing a message 
 
 <p>The numbers in parentheses next to the input boxes are the score for each player. The first number is the number of stones in the (outer) home circle for that player's region. The second number is the total number of stones in that player's region (only relevant if there is a tie in the home circle).</p>
 
+<h3>Saving and Restoring Games</h3>
+
+<p>Below the "Game ID" line is a line containing a long text input box and a "Restore" button. The text box is a representation of the current state of the game, the board, the player names, and the resolver. It will be updated as you play. You can save it at any time, by selecting (triple-click will select the whole thing in most browsers) and copying, then pasting into a file or email.</p>
+
+<p>To restore a saved game, enter your "Name", paste the saved string back into the text box, and click the "Restore" button. This will work exactly the same as the "New Game" button, except the initial board, number of players, and resolver will be taken from the saved string. If you check the "public" box, the game will be public. You will be player number 1, so if you were NOT player 1 when you saved the game, you will have changed players.</p>
+
+<p>The history table at the bottom of the screen doesn't yet reflect that the game started with a saved state.</p>
+
 <h3>Source Code</h3>
 
 <p>Clicking the "GitHub" link near the bottom of the page will open the source code repository in a new browser tab/window.</p>
