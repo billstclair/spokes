@@ -11,10 +11,12 @@
 
 module Spokes.Server.EncodeDecode exposing ( messageDecoder, decodeMessage
                                            , messageEncoder, encodeMessage
+                                           , restoreStateEncoder, restoreStateDecoder
+                                           , encodeRestoreState, decodeRestoreState
                                            )
 
 import Spokes.Types exposing ( Color(..), Move(..), Message(..), GameOverReason(..)
-                             , PublicGames, PublicGame
+                             , PublicGames, PublicGame, RestoreState
                              , movedStoneString, stringToMovedStone
                              , get
                              )
@@ -54,6 +56,7 @@ type alias MessageParams =
     , games : Maybe String
     , isPublic : Bool
     , reason : Maybe GameOverReason
+    , restoreState : Maybe RestoreState
     }
 
 rawMessageToParams : Message -> Maybe MessageParams
@@ -83,10 +86,12 @@ rawMessageToParams message =
                      , isPublic = Maybe.withDefault False
                                   <| maybeBool (get "isPublic" plist)
                      , reason = maybeGameOverReason
-                            (get "reason" plist)
-                            (get "reasonnumber" plist)
-                            placements
-                            resolution
+                                (get "reason" plist)
+                                (get "reasonnumber" plist)
+                                placements
+                                resolution
+                     , restoreState = maybeRestoreState
+                                      <| get "restoreState" plist
                  }
         _ ->
             Nothing
@@ -252,6 +257,18 @@ maybeGameOverReason gos number placements resolution =
         Just s ->
             Just <| stringToGameOverReason s number placements resolution
 
+maybeRestoreState : Maybe String -> Maybe RestoreState
+maybeRestoreState state =
+    case state of
+        Nothing ->
+            Nothing
+        Just s ->
+            case decodeRestoreState s of
+                Err _ ->
+                    Nothing
+                Ok restoreState ->
+                    Just restoreState
+
 decodeMessage : String -> Result String Message
 decodeMessage string =
     JD.decodeString messageDecoder string
@@ -344,6 +361,14 @@ parseRequest msg params rawMessage =
                                 ResolveReq { playerid = pid
                                            , resolution = res
                                            }
+        "restoreState" ->
+            let { playerid } = params
+            in
+                case playerid of
+                    Nothing ->
+                        rawMessage
+                    Just pid ->
+                        RestoreStateReq { playerid = pid }
         "games" ->
             GamesReq
         "undo" ->
@@ -461,6 +486,20 @@ parseResponse msg params rawMessage =
                                 ResolveRsp { gameid = gid
                                            , resolution = res
                                            }
+        "restoreState" ->
+            let { gameid, restoreState } = params
+            in
+                case gameid of
+                    Nothing ->
+                        rawMessage
+                    Just gid ->
+                        case restoreState of
+                            Nothing ->
+                                rawMessage
+                            Just state ->
+                                RestoreStateRsp { gameid = gid
+                                                , restoreState = state
+                                                }
         "resign" ->
             let { gameid, number, placements } = params
             in
@@ -564,6 +603,17 @@ parseRawMessage rawMessage =
                         parseResponse msg params rawMessage
                     _ ->
                         rawMessage
+
+restoreStateDecoder : Decoder RestoreState
+restoreStateDecoder =
+    JD.map3 RestoreState
+        (JD.index 0 JD.string)
+        (JD.index 1 <| JD.list JD.string)
+        (JD.index 2 JD.int)
+
+decodeRestoreState : String -> Result String RestoreState
+decodeRestoreState json =
+    JD.decodeString restoreStateDecoder json
 
 ---
 --- Encoder
@@ -670,6 +720,14 @@ messageEncoder message =
                                              , ("from", from)
                                              , ("to", to)
                                              ]
+        RestoreStateReq { playerid } ->
+            messageValue "req" "restoreState"  [ ("playerid", playerid) ]
+        RestoreStateRsp { gameid, restoreState } ->
+            messageValue "rsp" "restoreState" [ ("gameid", gameid)
+                                              , ("restoreState"
+                                                , encodeRestoreState restoreState
+                                                )
+                                              ]
         -- Public games
         GamesReq ->
             messageValue "req" "games" []
@@ -753,3 +811,15 @@ resolutionToStrings move =
             (movedStoneString moved, from, to)
         _ ->
             ("", "", "")
+
+restoreStateEncoder : RestoreState -> Value
+restoreStateEncoder state =
+    JE.list [JE.string state.board
+            , JE.list <| List.map JE.string state.players
+            , JE.int state.resolver
+            ]
+
+encodeRestoreState : RestoreState -> String
+encodeRestoreState state =
+    JE.encode 0 <| restoreStateEncoder state
+

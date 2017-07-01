@@ -16,6 +16,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , StonePile, DisplayList
                              , Message(..), ServerPhase(..), GameOverReason(..)
                              , GameState, ServerState, ServerInterface(..)
+                             , RestoreState
                              , PublicGames, PublicGame, emptyPublicGames
                              , zeroPoint, emptyStonePile, emptyDisplayList
                              , get, set, butLast, adjoin
@@ -273,6 +274,8 @@ type Message
     | PlacedRsp { gameid : String, placements : List Move }
     | ResolveReq { playerid : String, resolution : Move }
     | ResolveRsp { gameid : String, resolution : Move }
+    | RestoreStateReq { playerid : String }
+    | RestoreStateRsp { gameid : String, restoreState : RestoreState }
     -- End of game
     | ResignReq { playerid : String }
     | ResignRsp { gameid : String, number: Int, placements : Maybe (List Move) }
@@ -333,3 +336,8 @@ type ServerInterface msg
       , placeOnly : Bool
       }
 
+type alias RestoreState =
+    { board : String
+    , players : List String
+    , resolver : Int
+    }

@@ -81,6 +81,13 @@ protocolData =
     , ResolveReq { playerid = "p2", resolution = Resolution MoveBlack "D2" "2" }
     , ResolveReq { playerid = "p1", resolution = Resolution MoveBlock "C3" "D3" }
     , ResolveRsp { gameid = "asdf", resolution = Resolution MoveBlock "C3" "D3" }
+    , RestoreStateReq { playerid = "p1" }
+    , RestoreStateRsp { gameid = "asdf"
+                      , restoreState = { board = "board"
+                                       , players = [ "Bill", "Chris" ]
+                                       , resolver = 1
+                                       }
+                      }
     , ResignReq { playerid = "p1" }
     , ResignRsp { gameid = "asdf", number = 1, placements = Nothing }
     , ResignRsp { gameid = "asdf", number = 1
