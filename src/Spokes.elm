@@ -18,7 +18,7 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , Turn, History, newTurn
                                       , ServerPhase(..), ServerInterface(..)
                                       , Message(..)
-                                      , GameOverReason(..)
+                                      , GameOverReason(..), RestoreState
                                       , PublicGames, PublicGame, emptyPublicGames
                                       , movedStoneString, butLast, adjoin
                                       )
@@ -26,7 +26,7 @@ import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , computeDisplayList, findResolution
                                       , placementText, colorLetter
                                       )
-import Spokes.Server.EncodeDecode exposing ( decodeMessage )
+import Spokes.Server.EncodeDecode exposing ( decodeMessage, encodeRestoreState )
 import Spokes.Server.Interface as Interface exposing
     ( makeProxyServer, makeServer )
 
@@ -1298,8 +1298,26 @@ renderGamePage model =
                                              [ text "Join Game" ]
                                        ]
                              ]
+                   , renderRestoreState model
                    ]
             ]
+
+renderRestoreState : Model -> Html Msg
+renderRestoreState model =
+    case encodedRestoreState model of
+        Nothing ->
+            text ""
+        Just s ->
+            span []
+                [ br
+                , b [ text "Restore: " ]
+                , input [ type_ "text"
+                        , disabled True
+                        , size 60
+                        , value s
+                        ]
+                      []
+                ]
 
 chatParagraph : Model -> (Model -> String) -> Html Msg
 chatParagraph model accessor =
@@ -1565,6 +1583,10 @@ getPlayerName player prefix model =
             Just (_, name) ->
                 name
 
+getPlayerNames : Model -> List String
+getPlayerNames model =
+    List.map Tuple.second model.playerNames
+
 isResigned : Model -> Int -> Bool
 isResigned model number =
     List.member (if number == 0 then model.playerNumber else number)
@@ -1630,3 +1652,25 @@ radio name_ value isChecked isDisabled msg =
             []
         , text value
         ]
+
+isStarting : Model -> Bool
+isStarting model =
+    model.players /= List.length model.playerNames
+
+createRestoreState : Model -> Maybe RestoreState
+createRestoreState model =
+    if isStarting model then
+        Nothing
+    else
+        Just { board = Board.boardToEncodedString model.board
+             , players = getPlayerNames model
+             , resolver = model.resolver
+             }
+
+encodedRestoreState : Model -> Maybe String
+encodedRestoreState model =
+    case createRestoreState model of
+        Nothing ->
+            Nothing
+        Just restoreState ->
+            Just <| encodeRestoreState restoreState

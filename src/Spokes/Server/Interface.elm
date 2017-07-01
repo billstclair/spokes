@@ -14,6 +14,7 @@ module Spokes.Server.Interface exposing ( emptyServerState
                                         , getServer
                                         , processServerMessage
                                         , getGameList, setGameList
+                                        , createRestoreState
                                         )
 
 import Spokes.Server.EncodeDecode exposing ( encodeMessage )
@@ -22,13 +23,14 @@ import Spokes.Types as Types
     exposing ( Board, DisplayList, Move(..), StonePile, RenderInfo
              , History, newTurn, Message(..), ServerPhase(..)
              , GameState, ServerState, ServerInterface(..)
-             , GameOverReason(..)
+             , GameOverReason(..), RestoreState
              , PublicGames, PublicGame, emptyPublicGames
              , butLast, adjoin
              )
 import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
                              , getNode, isLegalMove, makeMove, undoMove
                              , canResolve, findFullHomeCircle
+                             , boardToEncodedString
                              )
 
 
@@ -303,6 +305,38 @@ processServerMessage state message =
             ( state
             , errorRsp message IllegalRequestErr "Illegal Request"
             )
+
+getPlayerNames : String -> ServerState -> Maybe (List String)
+getPlayerNames gameid state =
+    case Dict.get gameid state.playeridDict of
+        Nothing ->
+            Nothing
+        Just playerids ->
+            Just 
+                <| List.map2 (\playerid defaultName ->
+                                  case Dict.get playerid state.playerInfoDict of
+                                      Nothing ->
+                                          defaultName
+                                      Just info ->
+                                          info.name
+                             )
+                    playerids
+                    ["Player 1", "Player 2", "Player 3", "Player 4"]    
+
+createRestoreState : String -> ServerState -> Maybe RestoreState
+createRestoreState gameid state =
+    case Dict.get gameid state.gameDict of
+        Nothing ->
+            Nothing
+        Just gameState ->
+            case getPlayerNames gameid state of
+                Nothing ->
+                    Nothing
+                Just names ->
+                    Just { board = boardToEncodedString gameState.board
+                         , players = names
+                         , resolver = gameState.resolver
+                         }
 
 getGameList : PublicGames -> Int -> List PublicGame
 getGameList games players =
