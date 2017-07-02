@@ -963,7 +963,7 @@ responseCountRsp model gameid responseCount restoreState =
     in
         addChat m
             <| "Restored state. Missed "
-                ++ (toString <| responseCount - model.responseCount)
+                ++ (toString <| responseCount - model.responseCount + 1)
                 ++ " server responses."
 
 processRestoreState : Model -> Maybe RestoreState -> (Board, DisplayList, Int)
