@@ -112,13 +112,13 @@ protocolData =
     , ResolveReq { playerid = "p1", resolution = Resolution MoveBlock "C3" "D3" }
     , ResolveRsp { gameid = "asdf", resolution = Resolution MoveBlock "C3" "D3" }
     , ResponseCountReq { playerid = "p1", number = 20 }
-    , RestoreStateRsp { gameid = "asdf"
-                      , number = 21
-                      , restoreState = { board = "board"
-                                       , players = [ "Bill", "Chris" ]
-                                       , resolver = 1
-                                       }
-                      }
+    , ResponseCountRsp { gameid = "asdf"
+                       , number = 21
+                       , restoreState = { board = "board"
+                                        , players = [ "Bill", "Chris" ]
+                                        , resolver = 1
+                                        }
+                       }
     , ResignReq { playerid = "p1" }
     , ResignRsp { gameid = "asdf", number = 1, placements = Nothing }
     , ResignRsp { gameid = "asdf", number = 1

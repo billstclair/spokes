@@ -244,7 +244,7 @@ processServerMessage state message =
                                              (state, noMessage)
                                          Just restoreState ->
                                              ( state
-                                             , RestoreStateRsp
+                                             , ResponseCountRsp
                                                    { gameid = gameid
                                                    , number = info.responseCount
                                                    , restoreState = restoreState

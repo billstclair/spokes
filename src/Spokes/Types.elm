@@ -289,7 +289,7 @@ type Message
     | ResolveReq { playerid : String, resolution : Move }
     | ResolveRsp { gameid : String, resolution : Move }
     | ResponseCountReq { playerid : String, number : Int }
-    | RestoreStateRsp { gameid : String, number : Int, restoreState : RestoreState }
+    | ResponseCountRsp { gameid : String, number : Int, restoreState : RestoreState }
     -- End of game
     | ResignReq { playerid : String }
     | ResignRsp { gameid : String, number: Int, placements : Maybe (List Move) }

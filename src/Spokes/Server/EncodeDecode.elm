@@ -495,7 +495,7 @@ parseResponse msg params rawMessage =
                                 ResolveRsp { gameid = gid
                                            , resolution = res
                                            }
-        "restoreState" ->
+        "responseCount" ->
             let { gameid, number, restoreState } = params
             in
                 case gameid of
@@ -510,10 +510,10 @@ parseResponse msg params rawMessage =
                                     Nothing ->
                                         rawMessage
                                     Just state ->
-                                        RestoreStateRsp { gameid = gid
-                                                        , number = n
-                                                        , restoreState = state
-                                                        }
+                                        ResponseCountRsp { gameid = gid
+                                                         , number = n
+                                                         , restoreState = state
+                                                         }
         "resign" ->
             let { gameid, number, placements } = params
             in
@@ -756,13 +756,13 @@ messageEncoder message =
             messageValue "req" "responseCount"  [ ("playerid", playerid)
                                                 , ("number", toString number)
                                                 ]
-        RestoreStateRsp { gameid, number, restoreState } ->
-            messageValue "rsp" "restoreState" [ ("gameid", gameid)
-                                              , ("number", toString number)
-                                              , ("restoreState"
-                                                , encodeRestoreState restoreState
-                                                )
-                                              ]
+        ResponseCountRsp { gameid, number, restoreState } ->
+            messageValue "rsp" "responseCount" [ ("gameid", gameid)
+                                               , ("number", toString number)
+                                               , ("restoreState"
+                                                 , encodeRestoreState restoreState
+                                                 )
+                                               ]
         -- Public games
         GamesReq ->
             messageValue "req" "games" []
