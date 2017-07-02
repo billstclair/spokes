@@ -53,6 +53,7 @@ import Json.Decode as Json
 import Dom.Scroll as Scroll
 import Task
 import Set
+import Time exposing ( Time )
 import Debug exposing ( log )
 
 main =
@@ -82,7 +83,11 @@ type alias Model =
     , resolver : Int
     , selectedPile : Maybe StonePile
     , server : ServerInterface Msg
+    , connected : Bool
     , localServer : Maybe (ServerInterface Msg)
+    , responseCount : Int
+    , time : Time
+    , nextResponseCountTime : Maybe Time
     , gameid : String
     , placeOnly : Bool
     , restoreState : String
@@ -127,7 +132,11 @@ initialModel =
     , resolver = 1
     , selectedPile = Nothing
     , server = makeProxyServer ServerResponse
+    , connected = True
     , localServer = Nothing
+    , responseCount = 0
+    , time = 0
+    , nextResponseCountTime = Nothing
     , gameid = ""
     , placeOnly = False
     , restoreState = ""
@@ -182,7 +191,16 @@ subscriptions model =
     if model.isLocal then
         Sub.none
     else
-        WebSocket.listen (Interface.getServer model.server) WebSocketMessage
+        Sub.batch
+            [ if model.connected then
+                  WebSocket.listen
+                      (Interface.getServer model.server) WebSocketMessage
+              else
+                  -- This is for simulating connection loss
+                  -- Chat "disconnect" / "connect" to switch off / on.
+                  Sub.none
+            , Time.every Time.second Tick
+            ]
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -196,14 +214,22 @@ update msg model =
             , Cmd.none
             )
         SendChat ->
-            let text = log "SendChat" <| String.trim model.chatInput
+            let text = String.trim model.chatInput
             in
                 if text == "" then
                     ( model
                     , Cmd.none
                     )
                 else
-                    ( { model | chatInput = "" }
+                    ( { model
+                          | chatInput = ""
+                          , connected = if text == "connect" then
+                                            True
+                                        else if text == "disconnect" then
+                                            False
+                                        else
+                                            model.connected
+                      }
                     , send model model.server
                         <| ChatReq { playerid = model.playerid
                                    , text = text
@@ -406,7 +432,15 @@ update msg model =
                     in
                         ( model, Cmd.none )
                 Ok message ->
-                    serverResponse model model.server message
+                    let m = case message of
+                                ErrorRsp _ ->
+                                    model
+                                _ ->
+                                    { model
+                                        | responseCount = model.responseCount + 1
+                                    }
+                    in
+                        serverResponse m model.server message
         ServerResponse server message ->
             serverResponse model server message
         ReceiveServerUrl response ->
@@ -417,6 +451,32 @@ update msg model =
                     ( { model | serverUrl = String.trim url }
                     , Cmd.none
                     )
+        Tick time ->
+            let m = { model | time = time }
+            in
+                case m.nextResponseCountTime of
+                    Nothing ->
+                        (m, Cmd.none)
+                    Just rct ->
+                        maybeSendResponseCountReq m time rct
+
+nextResponseCountReqPeriod : Time
+nextResponseCountReqPeriod =
+    15 * Time.second
+
+maybeSendResponseCountReq : Model -> Time -> Time -> (Model, Cmd Msg)
+maybeSendResponseCountReq model time nextResponseCountTime =
+    if time < nextResponseCountTime then
+        (model, Cmd.none)
+    else
+        ( { model |
+                nextResponseCountTime = Just <| time + nextResponseCountReqPeriod
+          }
+        , send model model.server
+            <| ResponseCountReq { playerid = model.playerid
+                                , number = model.responseCount
+                                }
+        )
 
 newGame : Model -> Maybe RestoreState -> (Model, Cmd Msg)
 newGame model restoreState =
@@ -428,7 +488,7 @@ newGame model restoreState =
                      makeServer model.serverUrl Noop
         players = model.newPlayers
         (board, displayList, resolver) =
-            processRestoreState model restoreState
+            processRestoreState initialModel restoreState
     in                             
         ( { initialModel
               | board = board
@@ -445,6 +505,7 @@ newGame model restoreState =
               , serverUrl = model.serverUrl
               , gameid = ""
               , newGameid = ""
+              , time = model.time
           }
         , send model server
             <| NewReq { players = players
@@ -476,6 +537,7 @@ joinGame model gameid =
                   , gameid = gameid
                   , newGameid = gameid
                   , serverUrl = model.serverUrl
+                  , time = model.time
               }
             , send model server
                 <| JoinReq { gameid = gameid
@@ -668,6 +730,11 @@ serverResponse mod server message =
                                     else
                                         ResolutionPhase
                           , turn = 1
+                          , nextResponseCountTime =
+                            if model.isLocal then
+                                Nothing
+                            else
+                                Just <| model.time + nextResponseCountReqPeriod
                       }
                   else
                       { model2 | phase = JoinPhase }
@@ -720,6 +787,11 @@ serverResponse mod server message =
                       }
                     , Cmd.none
                     )
+            ResponseCountRsp { gameid, number, restoreState } ->
+                if gameid /= model.gameid then
+                    ( model, Cmd.none )
+                else
+                    responseCountRsp model gameid number restoreState
             ResignRsp { gameid, number, placements } ->
                 if gameid /= model.gameid then
                     ( model, Cmd.none )
@@ -784,6 +856,7 @@ serverResponse mod server message =
                               , restoreState = createRestoreState model
                               , phase = GameOverPhase reason
                               , newGameid = ""
+                              , nextResponseCountTime = Nothing
                           }
                         , Cmd.none
                         )
@@ -867,6 +940,31 @@ serverResponse mod server message =
                 ( model
                 , Cmd.none
                 )
+
+responseCountRsp : Model -> String -> Int ->  RestoreState -> (Model, Cmd Msg)
+responseCountRsp model gameid responseCount restoreState =
+    let (board, displayList, resolver) =
+            processRestoreState model (Just restoreState)
+        phase = model.phase
+        newPhase = if phase /= PlacementPhase && phase /= ResolutionPhase then
+                       phase
+                   else
+                       if displayList.unresolvedPiles == [] then
+                           PlacementPhase
+                       else
+                           ResolutionPhase
+        m = { model
+                | board = board
+                , displayList = displayList
+                , resolver = resolver
+                , responseCount = responseCount + 1
+                , phase = newPhase
+            }
+    in
+        addChat m
+            <| "Restored state. Missed "
+                ++ (toString <| responseCount - model.responseCount)
+                ++ " server responses."
 
 processRestoreState : Model -> Maybe RestoreState -> (Board, DisplayList, Int)
 processRestoreState model restoreState =

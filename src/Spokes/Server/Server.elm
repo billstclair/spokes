@@ -203,7 +203,7 @@ socketMessage model socket request =
                     , Cmd.none
                     )
                 else
-                    processResponse model socket state response
+                    processResponse model socket state message response
 
 updatePublicGameId : PublicGames -> Int -> String -> String -> PublicGames
 updatePublicGameId games players gameid gid =
@@ -217,8 +217,8 @@ updatePublicGameId games players gameid gid =
                     <| { game | gameid = gid }
                         :: (List.filter (\game -> game.gameid /= gameid) gameList)
 
-processResponse : Model -> Socket -> ServerState -> Message -> (Model, Cmd Msg)
-processResponse model socket state response =
+processResponse : Model -> Socket -> ServerState -> Message -> Message -> (Model, Cmd Msg)
+processResponse model socket state message response =
     case response of
         (NewRsp { gameid, playerid, players, name, restoreState }) ->
             let (model2, _) = disconnection model socket
@@ -350,6 +350,16 @@ processResponse model socket state response =
                      , sendToMany rsp2 sockets
                      ]
                  )
+        ResponseCountRsp _ ->
+            let m = case message of
+                        ResponseCountReq { playerid } ->
+                            bumpResponseCount model playerid 1
+                        _ ->
+                            model
+            in
+            ( m
+            , sendToOne response socket
+            )
         ErrorRsp _ ->
             ( model
             , sendToOne response socket
@@ -393,12 +403,16 @@ processResponse model socket state response =
 responseGameid : Message -> String
 responseGameid message =
     case message of
-        PlaceRsp { gameid } -> gameid
-        ResolveRsp { gameid } -> gameid
-        UndoRsp { gameid } -> gameid
-        ChatRsp { gameid } -> gameid
         NewRsp { gameid } -> gameid
         JoinRsp { gameid } -> gameid
+        PlaceRsp { gameid } -> gameid
+        PlacedRsp { gameid } -> gameid
+        ResolveRsp { gameid } -> gameid
+        ResponseCountRsp { gameid } -> gameid
+        ResignRsp { gameid } -> gameid
+        GameOverRsp { gameid } -> gameid
+        UndoRsp { gameid } -> gameid
+        ChatRsp { gameid } -> gameid
         _ -> ""
 
 bumpResponseCount : Model -> String -> Int -> Model

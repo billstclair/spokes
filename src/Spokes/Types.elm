@@ -25,6 +25,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              )
 
 import Dict exposing ( Dict )
+import Time exposing ( Time )
 import Http
 
 type Page
@@ -63,6 +64,7 @@ type Msg
     | ServerResponse (ServerInterface Msg) Message
     | WebSocketMessage String
     | ReceiveServerUrl (Result Http.Error String)
+    | Tick Time
     | Noop
 
 type alias Board =

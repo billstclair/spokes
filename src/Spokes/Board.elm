@@ -870,13 +870,13 @@ moveStones : MovedStone -> Int -> Node -> Node
 moveStones moved delta node =
     case moved of
         MoveWhite ->
-            { node | whiteStones = node.whiteStones + delta }
+            { node | whiteStones = max 0 (node.whiteStones + delta) }
         MoveBlack ->
-            { node | blackStones = node.blackStones + delta }
+            { node | blackStones = max 0 (node.blackStones + delta) }
         MoveBlock ->
             { node
-                | whiteStones = node.whiteStones + delta
-                , blackStones = node.blackStones + delta
+                | whiteStones = max 0 (node.whiteStones + delta)
+                , blackStones = max 0 (node.blackStones + delta)
             }
 
 undoMove : Move -> Board -> Board
