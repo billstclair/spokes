@@ -111,8 +111,9 @@ protocolData =
     , ResolveReq { playerid = "p2", resolution = Resolution MoveBlack "D2" "2" }
     , ResolveReq { playerid = "p1", resolution = Resolution MoveBlock "C3" "D3" }
     , ResolveRsp { gameid = "asdf", resolution = Resolution MoveBlock "C3" "D3" }
-    , RestoreStateReq { playerid = "p1" }
+    , ResponseCountReq { playerid = "p1", number = 20 }
     , RestoreStateRsp { gameid = "asdf"
+                      , number = 21
                       , restoreState = { board = "board"
                                        , players = [ "Bill", "Chris" ]
                                        , resolver = 1

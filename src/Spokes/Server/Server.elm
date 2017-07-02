@@ -6,7 +6,9 @@ import Spokes.Server.Interface exposing ( emptyServerState, send
                                         , getGameList, setGameList
                                         )
 import Spokes.Server.Error exposing ( ServerError(..), errnum )
-import Spokes.Types exposing ( Message(..), ServerState, PublicGames )
+import Spokes.Types exposing ( Message(..), ServerState, PublicGames
+                             , noMessage
+                             )
 
 import Platform exposing ( Program )
 import Json.Decode as Decode exposing ( Decoder )
@@ -18,7 +20,7 @@ import Char
 import Dict exposing ( Dict )
 import List.Extra as LE
 import Debug exposing ( log )
-import WebSocketServer as WSS exposing ( Socket, sendToOne, sendToMany )
+import WebSocketServer as WSS exposing ( Socket )
 
 main : Program Never Model Msg
 main =
@@ -196,7 +198,12 @@ socketMessage model socket request =
         Ok message ->
             let (state, response) = processServerMessage model.state message
             in
-                processResponse model socket state response
+                if response == noMessage then
+                    ( { model | state = state }
+                    , Cmd.none
+                    )
+                else
+                    processResponse model socket state response
 
 updatePublicGameId : PublicGames -> Int -> String -> String -> PublicGames
 updatePublicGameId games players gameid gid =
@@ -230,6 +237,7 @@ processResponse model socket state response =
                                          { gameid = gid
                                          , number = 1
                                          , name = name
+                                         , responseCount = 1
                                          }
                                      playeridDict =
                                          Dict.remove gameid state.playeridDict
@@ -268,6 +276,7 @@ processResponse model socket state response =
                  playerInfo = { gameid = gameid
                               , number = number
                               , name = name
+                              , responseCount = 0
                               }
                  playerInfoDict = case playerid of
                                   Just id -> Dict.remove id state.playerInfoDict
@@ -332,7 +341,8 @@ processResponse model socket state response =
                             )
                             playerids
              in
-                 ( model4
+                 ( bumpResponseCount (bumpAllResponseCounts model4 gameid)
+                       pid (List.length oldJoins)
                  , Cmd.batch
                      [ sendToOne rsp socket
                      , List.map (\r -> sendToOne r socket) oldJoins
@@ -376,7 +386,7 @@ processResponse model socket state response =
                               Just socks ->
                                   socks
             in
-                ( { model2 | state = state }
+                ( bumpAllResponseCounts { model2 | state = state } gameid
                 , sendToMany response sockets
                 )
 
@@ -390,6 +400,60 @@ responseGameid message =
         NewRsp { gameid } -> gameid
         JoinRsp { gameid } -> gameid
         _ -> ""
+
+bumpResponseCount : Model -> String -> Int -> Model
+bumpResponseCount model playerid count =
+    if count <= 0 then
+        model
+    else
+        let state = model.state
+            playerInfoDict = state.playerInfoDict
+        in
+            case Dict.get playerid playerInfoDict of
+                Nothing ->
+                    model
+                Just playerInfo ->
+                    { model
+                        | state =
+                          { state
+                              | playerInfoDict =
+                                  Dict.insert playerid
+                                      { playerInfo
+                                          | responseCount =
+                                              playerInfo.responseCount + 1
+                                      }
+                                      playerInfoDict
+                          }
+                    }
+
+bumpAllResponseCounts : Model -> String -> Model
+bumpAllResponseCounts model gameid =
+    let state = model.state
+    in
+        case Dict.get gameid state.playeridDict of
+            Nothing ->
+                model
+            Just playerids ->
+                { model
+                    | state =
+                        { state
+                            | playerInfoDict =
+                                List.foldl (\pid dict ->
+                                                case Dict.get pid dict of
+                                                    Nothing ->
+                                                        dict
+                                                    Just info ->
+                                                        Dict.insert pid
+                                                            { info |
+                                                                  responseCount =
+                                                                  info.responseCount + 1
+                                                            }
+                                                            dict
+                                           )
+                                    state.playerInfoDict
+                                    playerids
+                        }
+                }                    
 
 -- SUBSCRIPTIONS
 

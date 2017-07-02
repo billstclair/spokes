@@ -21,6 +21,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , zeroPoint, emptyStonePile, emptyDisplayList
                              , get, set, butLast, adjoin
                              , movedStoneString, stringToMovedStone
+                             , noMessage
                              )
 
 import Dict exposing ( Dict )
@@ -256,6 +257,10 @@ emptyPublicGames = { twoPlayer = []
                    , fourPlayer = []
                    }
 
+noMessage : Message
+noMessage =
+    RawMessage "" "" []
+
 type Message
     = RawMessage String String (List (String, String))
     -- Basic game play
@@ -283,8 +288,8 @@ type Message
     | PlacedRsp { gameid : String, placements : List Move }
     | ResolveReq { playerid : String, resolution : Move }
     | ResolveRsp { gameid : String, resolution : Move }
-    | RestoreStateReq { playerid : String }
-    | RestoreStateRsp { gameid : String, restoreState : RestoreState }
+    | ResponseCountReq { playerid : String, number : Int }
+    | RestoreStateRsp { gameid : String, number : Int, restoreState : RestoreState }
     -- End of game
     | ResignReq { playerid : String }
     | ResignRsp { gameid : String, number: Int, placements : Maybe (List Move) }
@@ -312,6 +317,7 @@ type alias PlayerInfo =
     { gameid : String
     , number : Int
     , name : String
+    , responseCount : Int
     }
 
 type alias ServerState =

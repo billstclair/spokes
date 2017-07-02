@@ -362,14 +362,20 @@ parseRequest msg params rawMessage =
                                 ResolveReq { playerid = pid
                                            , resolution = res
                                            }
-        "restoreState" ->
-            let { playerid } = params
+        "responseCount" ->
+            let { playerid, number } = params
             in
                 case playerid of
                     Nothing ->
                         rawMessage
                     Just pid ->
-                        RestoreStateReq { playerid = pid }
+                        case number of
+                            Nothing ->
+                                rawMessage
+                            Just n ->
+                                ResponseCountReq { playerid = pid
+                                                 , number = n
+                                                 }
         "games" ->
             GamesReq
         "undo" ->
@@ -490,19 +496,24 @@ parseResponse msg params rawMessage =
                                            , resolution = res
                                            }
         "restoreState" ->
-            let { gameid, restoreState } = params
+            let { gameid, number, restoreState } = params
             in
                 case gameid of
                     Nothing ->
                         rawMessage
                     Just gid ->
-                        case restoreState of
+                        case number of
                             Nothing ->
                                 rawMessage
-                            Just state ->
-                                RestoreStateRsp { gameid = gid
-                                                , restoreState = state
-                                                }
+                            Just n ->
+                                case restoreState of
+                                    Nothing ->
+                                        rawMessage
+                                    Just state ->
+                                        RestoreStateRsp { gameid = gid
+                                                        , number = n
+                                                        , restoreState = state
+                                                        }
         "resign" ->
             let { gameid, number, placements } = params
             in
@@ -741,10 +752,13 @@ messageEncoder message =
                                              , ("from", from)
                                              , ("to", to)
                                              ]
-        RestoreStateReq { playerid } ->
-            messageValue "req" "restoreState"  [ ("playerid", playerid) ]
-        RestoreStateRsp { gameid, restoreState } ->
+        ResponseCountReq { playerid, number } ->
+            messageValue "req" "responseCount"  [ ("playerid", playerid)
+                                                , ("number", toString number)
+                                                ]
+        RestoreStateRsp { gameid, number, restoreState } ->
             messageValue "rsp" "restoreState" [ ("gameid", gameid)
+                                              , ("number", toString number)
                                               , ("restoreState"
                                                 , encodeRestoreState restoreState
                                                 )

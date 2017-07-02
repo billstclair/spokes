@@ -24,7 +24,7 @@ import Spokes.Types as Types
              , History, newTurn, Message(..), ServerPhase(..)
              , GameState, ServerState, ServerInterface(..)
              , GameOverReason(..), RestoreState
-             , PublicGames, PublicGame, emptyPublicGames
+             , PublicGames, PublicGame, emptyPublicGames, noMessage
              , butLast, adjoin
              )
 import Spokes.Board exposing ( renderInfo, computeDisplayList, initialBoard
@@ -225,6 +225,31 @@ processServerMessage state message =
                         Nothing ->
                             updateGameState state
                                 <| resolveReq gameState message resolution
+        ResponseCountReq { playerid, number } ->
+            case checkOnlyPlayerid state message playerid of
+                Err err ->
+                    (state, err)
+                Ok (gameState, _) ->
+                    let playerInfoDict = state.playerInfoDict
+                        gameid = gameState.gameid
+                    in
+                        case Dict.get playerid playerInfoDict of
+                            Nothing ->
+                                (state, noMessage)
+                            Just info ->
+                                if number == info.responseCount then
+                                    (state, noMessage)
+                                else case createRestoreState gameid state of
+                                         Nothing ->
+                                             (state, noMessage)
+                                         Just restoreState ->
+                                             ( state
+                                             , RestoreStateRsp
+                                                   { gameid = gameid
+                                                   , number = info.responseCount
+                                                   , restoreState = restoreState
+                                                   }
+                                             )                                
         ResignReq { playerid } ->
             case checkOnlyPlayerid state message playerid of
                 Err err ->
@@ -429,6 +454,7 @@ newReqInternal state message players name isPublic restoreState =
         playerInfo = { gameid = gameid
                      , number = 1
                      , name = name
+                     , responseCount = 0
                      }
         st2 = { state
                   | gameDict =
@@ -627,6 +653,7 @@ joinReq state gameState message gameid name =
         playerInfo = { gameid = gameid
                      , number = player
                      , name = name
+                     , responseCount = 0
                      }
         st2 = { state
                   | gameDict = Dict.insert gameid gs2 state.gameDict
