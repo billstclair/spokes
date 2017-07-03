@@ -13,6 +13,7 @@ module Spokes.Server.EncodeDecode exposing ( messageDecoder, decodeMessage
                                            , messageEncoder, encodeMessage
                                            , restoreStateEncoder, restoreStateDecoder
                                            , encodeRestoreState, decodeRestoreState
+                                           , fixCurlyQuotes
                                            )
 
 import Spokes.Types exposing ( Color(..), Move(..), Message(..), GameOverReason(..)
@@ -24,6 +25,8 @@ import Spokes.Board exposing ( parsePlacementMove, placementText, colorLetter )
 
 import Json.Decode as JD exposing ( Decoder )
 import Json.Encode as JE exposing ( Value )
+import Char
+import String.Extra as SE
 
 ---
 --- Decoder
@@ -625,9 +628,28 @@ restoreStateDecoder =
         (JD.index 1 <| JD.list JD.string)
         (JD.index 2 JD.int)
 
+leftCurlyQuote : String
+leftCurlyQuote =
+    String.fromChar(Char.fromCode(8220))
+
+rightCurlyQuote : String
+rightCurlyQuote =
+    String.fromChar(Char.fromCode(8221))
+
+asciiQuote : String
+asciiQuote =
+    "\""
+
+-- Users will sometimes type restore state strings, so they'll get
+-- curly quotes, thanks to helpful text editors.
+fixCurlyQuotes : String -> String
+fixCurlyQuotes string =
+    SE.replace leftCurlyQuote asciiQuote
+        <| SE.replace rightCurlyQuote asciiQuote string
+
 decodeRestoreState : String -> Result String RestoreState
 decodeRestoreState json =
-    JD.decodeString restoreStateDecoder json
+    JD.decodeString restoreStateDecoder <| fixCurlyQuotes json
 
 ---
 --- Encoder
