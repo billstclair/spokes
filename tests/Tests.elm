@@ -118,6 +118,7 @@ protocolData =
                                         , players = [ "Bill", "Chris" ]
                                         , resolver = 1
                                         }
+                       , votedUnresolvable = [1, 3]
                        }
     , ResignReq { playerid = "p1" }
     , ResignRsp { gameid = "asdf", number = 1, placements = Nothing }
@@ -126,6 +127,8 @@ protocolData =
                                     , Placement Black "D3"
                                     ]
                 }
+    , UnresolvableVoteReq { playerid = "p1", vote = True }
+    , UnresolvableVoteRsp { gameid = "asdf", number = 1, vote = False }
     , GameOverRsp { gameid = "asdf", reason = ResignationReason 2 }
     , GameOverRsp { gameid = "asdf"
                   , reason = UnresolvableReason [ Placement White "C1"

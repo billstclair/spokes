@@ -19,7 +19,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , RestoreState
                              , PublicGames, PublicGame, emptyPublicGames
                              , zeroPoint, emptyStonePile, emptyDisplayList
-                             , get, set, butLast, adjoin
+                             , get, set, butLast, adjoin, toBitmap, fromBitmap
                              , movedStoneString, stringToMovedStone
                              , noMessage
                              )
@@ -27,6 +27,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
 import Dict exposing ( Dict )
 import Time exposing ( Time )
 import Http
+import Bitwise
 
 type Page
     = GamePage
@@ -232,12 +233,34 @@ adjoin a list =
     else
         a :: list
 
+toBitmap : List Int -> Int
+toBitmap ints =
+    List.foldl (\int res -> res + 2^(int-1)) 0 ints
+
+fromBitmap : Int -> List Int
+fromBitmap int =
+    let loop : Int -> Int -> List Int -> List Int
+        loop = (\n bit res ->
+                    if n == 0 then
+                        List.reverse res
+                    else
+                        let nextn = Bitwise.shiftRightZfBy 1 n
+                        in
+                            if 0 == (Bitwise.and n 1) then
+                                loop nextn (bit+1) res
+                            else
+                                loop nextn (bit+1) (bit :: res)
+               )
+    in
+        loop int 1 []
+
 ---
 --- Backend interface
 ---
 
 type GameOverReason
     = ResignationReason Int
+    | UnresolvableVoteReason
     | UnresolvableReason (List Move)
     | HomeCircleFullReason Int (List Move)
     | TimeoutReason
@@ -291,10 +314,16 @@ type Message
     | ResolveReq { playerid : String, resolution : Move }
     | ResolveRsp { gameid : String, resolution : Move }
     | ResponseCountReq { playerid : String, number : Int }
-    | ResponseCountRsp { gameid : String, number : Int, restoreState : RestoreState }
+    | ResponseCountRsp { gameid : String
+                       , number : Int
+                       , restoreState : RestoreState
+                       , votedUnresolvable : List Int
+                       }
     -- End of game
     | ResignReq { playerid : String }
     | ResignRsp { gameid : String, number: Int, placements : Maybe (List Move) }
+    | UnresolvableVoteReq { playerid : String, vote : Bool }
+    | UnresolvableVoteRsp { gameid : String, number : Int, vote : Bool }
     | GameOverRsp { gameid : String, reason: GameOverReason }
     -- Public games
     | GamesReq

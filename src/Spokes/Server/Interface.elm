@@ -248,6 +248,8 @@ processServerMessage state message =
                                                    { gameid = gameid
                                                    , number = info.responseCount
                                                    , restoreState = restoreState
+                                                   -- TODO
+                                                   , votedUnresolvable = []
                                                    }
                                              )                                
         ResignReq { playerid } ->

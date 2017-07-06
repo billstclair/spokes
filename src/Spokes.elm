@@ -1224,6 +1224,10 @@ gameOverReasonText model reason =
         case reason of
             ResignationReason player ->
                 (pname player) ++ " resigned."
+            UnresolvableVoteReason ->
+                -- TODO: Lookup player name or YOU
+                "Player " ++ (toString model.resolver) ++
+                "is resolving after unresolvable vote."
             UnresolvableReason _ ->
                 "Unresolvable."
             HomeCircleFullReason player _ ->

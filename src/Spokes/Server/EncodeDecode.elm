@@ -19,7 +19,7 @@ module Spokes.Server.EncodeDecode exposing ( messageDecoder, decodeMessage
 import Spokes.Types exposing ( Color(..), Move(..), Message(..), GameOverReason(..)
                              , PublicGames, PublicGame, RestoreState
                              , movedStoneString, stringToMovedStone
-                             , get
+                             , get, toBitmap, fromBitmap
                              )
 import Spokes.Board exposing ( parsePlacementMove, placementText, colorLetter )
 
@@ -60,6 +60,8 @@ type alias MessageParams =
     , isPublic : Bool
     , reason : Maybe GameOverReason
     , restoreState : Maybe RestoreState
+    , vote : Maybe Bool
+    , votedUnresolvable : Maybe Int
     }
 
 rawMessageToParams : Message -> Maybe MessageParams
@@ -95,6 +97,8 @@ rawMessageToParams message =
                                 resolution
                      , restoreState = maybeRestoreState
                                       <| get "restoreState" plist
+                     , vote = maybeBool (get "vote" plist)
+                     , votedUnresolvable = maybeInt (get "votedUnresolvable" plist)
                  }
         _ ->
             Nothing
@@ -191,6 +195,8 @@ stringToGameOverReason string number placements resolution =
                     case String.toInt n of
                         Err _ -> UnknownReason string
                         Ok i -> ResignationReason i
+        "unresolvablevote" ->
+            UnresolvableVoteReason
         "unresolvable" ->
             case placements of
                 Nothing ->
@@ -239,6 +245,8 @@ gameOverReasonToString reason =
     case reason of
         ResignationReason n ->
             ("resignation", Just (toString n), Nothing, Nothing)
+        UnresolvableVoteReason ->
+            ("unresolvablevote", Nothing, Nothing, Nothing)
         UnresolvableReason moves ->
             let (placements, resolution) = movesToPlacementsOrResolution moves
             in
@@ -403,6 +411,20 @@ parseRequest msg params rawMessage =
                         rawMessage
                     Just pid ->
                         ResignReq { playerid = pid }
+        "unresolvableVote" ->
+            let { playerid, vote } = params
+            in
+                case playerid of
+                    Nothing ->
+                        rawMessage
+                    Just pid ->
+                        case vote of
+                            Nothing ->
+                                rawMessage
+                            Just v ->
+                                UnresolvableVoteReq { playerid = pid
+                                                    , vote = v
+                                                    }
         "chat" ->
             let { playerid, text } = params
             in
@@ -499,7 +521,7 @@ parseResponse msg params rawMessage =
                                            , resolution = res
                                            }
         "responseCount" ->
-            let { gameid, number, restoreState } = params
+            let { gameid, number, restoreState, votedUnresolvable } = params
             in
                 case gameid of
                     Nothing ->
@@ -513,10 +535,17 @@ parseResponse msg params rawMessage =
                                     Nothing ->
                                         rawMessage
                                     Just state ->
-                                        ResponseCountRsp { gameid = gid
-                                                         , number = n
-                                                         , restoreState = state
-                                                         }
+                                        case votedUnresolvable of
+                                            Nothing ->
+                                                rawMessage
+                                            Just vr ->
+                                                ResponseCountRsp
+                                                { gameid = gid
+                                                , number = n
+                                                , restoreState = state
+                                                , votedUnresolvable =
+                                                    fromBitmap vr
+                                                }
         "resign" ->
             let { gameid, number, placements } = params
             in
@@ -532,6 +561,25 @@ parseResponse msg params rawMessage =
                                           , number = num
                                           , placements = placements         
                                           }
+        "unresolvableVote" ->
+            let { gameid, number, vote } = params
+            in
+                case gameid of
+                    Nothing ->
+                        rawMessage
+                    Just gid ->
+                        case number of
+                            Nothing ->
+                                rawMessage
+                            Just n ->
+                                case vote of
+                                    Nothing ->
+                                        rawMessage
+                                    Just v ->
+                                        UnresolvableVoteRsp { gameid = gid
+                                                            , number = n
+                                                            , vote = v
+                                                            }
         "gameover" ->
             let { gameid, reason } = params
             in
@@ -778,11 +826,15 @@ messageEncoder message =
             messageValue "req" "responseCount"  [ ("playerid", playerid)
                                                 , ("number", toString number)
                                                 ]
-        ResponseCountRsp { gameid, number, restoreState } ->
+        ResponseCountRsp { gameid, number, restoreState, votedUnresolvable } ->
             messageValue "rsp" "responseCount" [ ("gameid", gameid)
                                                , ("number", toString number)
-                                               , ("restoreState"
+                                               , ( "restoreState"
                                                  , encodeRestoreState restoreState
+                                                 )
+                                               , ( "votedUnresolvable"
+                                                 , toString
+                                                     <| toBitmap votedUnresolvable
                                                  )
                                                ]
         -- Public games
@@ -802,10 +854,21 @@ messageEncoder message =
                             [ ("placements", placementsString ps) ]
             in
                 messageValue "rsp" "resign"
-                    <| List.append[ ("gameid", gameid)
-                                  , ("number", toString number)
-                                  ]
+                    <| List.append [ ("gameid", gameid)
+                                   , ("number", toString number)
+                                   ]
                         placementParams
+        UnresolvableVoteReq { playerid, vote } ->
+            messageValue "req" "unresolvableVote"
+                [ ("playerid", playerid)
+                , ("vote", if vote then "true" else "false")
+                ]
+        UnresolvableVoteRsp { gameid, number, vote } ->
+            messageValue "rsp" "unresolvableVote"
+                [ ("gameid", gameid)
+                , ("number", toString number)
+                , ("vote", if vote then "true" else "false")
+                ]
         GameOverRsp { gameid, reason } ->
             let (s, number, placements, resolution) = gameOverReasonToString reason
                 params = case placements of
