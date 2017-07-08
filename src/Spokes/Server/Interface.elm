@@ -62,6 +62,7 @@ emptyGameState =
     , unresolvedPiles = []
     , players = 2
     , resignedPlayers = []
+    , votedUnresolvable = []
     , turn = 1
     , resolver = 1
     , placements = Dict.empty
@@ -300,6 +301,33 @@ processServerMessage state message =
                                         gameOverRes
                                     else
                                         resignRes
+        UnresolvableVoteReq { playerid, vote } ->
+            case checkOnlyPlayerid state message playerid of
+                Err err ->
+                    (state, err)
+                Ok (gameState, number) ->
+                    let votedUnresolvable =
+                            if vote then
+                                adjoin number gameState.votedUnresolvable
+                            else
+                                LE.remove number gameState.votedUnresolvable
+                        gameid = gameState.gameid
+                        message =
+                            if List.length votedUnresolvable >= gameState.players
+                            then
+                                GameOverRsp { gameid = gameid
+                                            , reason = UnresolvableVoteReason
+                                            }
+                            else
+                                UnresolvableVoteRsp { gameid = gameid
+                                                    , number = number
+                                                    , vote = vote
+                                                    }
+                    in
+                        updateGameState state
+                            ( { gameState | votedUnresolvable = votedUnresolvable }
+                            , message
+                            )                            
         -- Public games
         GamesReq ->
             ( state
@@ -694,16 +722,8 @@ maybeGameOver board renderInfo gameid moves unresolvedPiles response phase =
                                   }
                     , GameOverPhase reason
                     )
-    else if canResolve board renderInfo (Just unresolvedPiles) then
-        (response, phase)
     else
-        let reason = UnresolvableReason moves
-        in
-            ( GameOverRsp { gameid = gameid
-                          , reason = reason
-                          }
-            , GameOverPhase reason
-            )
+        (response, phase)
 
 nextResolver : GameState -> Int
 nextResolver gameState =

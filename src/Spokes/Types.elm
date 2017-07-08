@@ -367,6 +367,7 @@ type alias GameState =
     , unresolvedPiles : List StonePile
     , players : Int
     , resignedPlayers : List Int
+    , votedUnresolvable : List Int
     , turn : Int
     , resolver : Int
     , placements : Dict Int Move
