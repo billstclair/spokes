@@ -909,15 +909,20 @@ makeMove move board =
                 Nothing ->
                     board
                 Just fromNode ->
-                    case getNode to board of
-                        Nothing ->
-                            board
-                        Just toNode ->
-                            let fn = moveStones moved -1 fromNode
-                                tn = moveStones moved 1 toNode
-                            in
-                                setNode from fn
-                                    <| setNode to tn board
+                    if to == "" then
+                        let fn = moveStones moved -1 fromNode
+                        in
+                            setNode from fn board
+                    else
+                        case getNode to board of
+                            Nothing ->
+                                board
+                            Just toNode ->
+                                let fn = moveStones moved -1 fromNode
+                                    tn = moveStones moved 1 toNode
+                                in
+                                    setNode from fn
+                                        <| setNode to tn board
 
 partitionStones : Int -> Int -> List (List String)
 partitionStones black white =

@@ -20,7 +20,8 @@ module Spokes.Server.Interface exposing ( emptyServerState
 import Spokes.Server.EncodeDecode exposing ( encodeMessage )
 import Spokes.Server.Error exposing ( ServerError(..), errnum )
 import Spokes.Types as Types
-    exposing ( Board, DisplayList, Move(..), StonePile, RenderInfo
+    exposing ( Board, DisplayList, RenderInfo
+             , StonePile, Move(..) , MovedStone(..)
              , History, newTurn, Message(..), ServerPhase(..)
              , GameState, ServerState, ServerInterface(..)
              , GameOverReason(..), RestoreState
@@ -302,32 +303,34 @@ processServerMessage state message =
                                     else
                                         resignRes
         UnresolvableVoteReq { playerid, vote } ->
-            case checkOnlyPlayerid state message playerid of
+            case checkPlayerid state message playerid ResolutionPhase of
                 Err err ->
                     (state, err)
                 Ok (gameState, number) ->
-                    let votedUnresolvable =
-                            if vote then
-                                adjoin number gameState.votedUnresolvable
-                            else
-                                LE.remove number gameState.votedUnresolvable
-                        gameid = gameState.gameid
-                        message =
-                            if List.length votedUnresolvable >= gameState.players
-                            then
-                                GameOverRsp { gameid = gameid
-                                            , reason = UnresolvableVoteReason
-                                            }
-                            else
-                                UnresolvableVoteRsp { gameid = gameid
-                                                    , number = number
-                                                    , vote = vote
-                                                    }
-                    in
-                        updateGameState state
-                            ( { gameState | votedUnresolvable = votedUnresolvable }
-                            , message
-                            )                            
+                    if didAllPlayersVoteUnresolvable gameState then
+                        ( state
+                        , errorRsp
+                            message IllegalRequestErr
+                                "All players have voted unresolvable"
+                        )
+                    else
+                        let votedUnresolvable =
+                                if vote then
+                                    adjoin number gameState.votedUnresolvable
+                                else
+                                    LE.remove number gameState.votedUnresolvable
+                            gameid = gameState.gameid
+                            message = UnresolvableVoteRsp { gameid = gameid
+                                                          , number = number
+                                                          , vote = vote
+                                                          }
+                        in
+                            updateGameState state
+                                ( { gameState
+                                      | votedUnresolvable = votedUnresolvable
+                                  }
+                                , message
+                                )
         -- Public games
         GamesReq ->
             ( state
@@ -361,6 +364,10 @@ processServerMessage state message =
             ( state
             , errorRsp message IllegalRequestErr "Illegal Request"
             )
+
+didAllPlayersVoteUnresolvable : GameState -> Bool
+didAllPlayersVoteUnresolvable gameState =
+    List.length gameState.votedUnresolvable == gameState.players
 
 getPlayerNames : String -> ServerState -> Maybe (List String)
 getPlayerNames gameid state =
@@ -600,7 +607,7 @@ processResign state gameid number resignedPlayers =
                                         , placements = Just placementsList
                                         }
                         in
-                            maybeGameOver board info gameid
+                            maybeGameOver state board info gameid
                                 placementsList unresolvedPiles
                                 placedRsp phase2
             in
@@ -708,22 +715,29 @@ joinReq state gameState message gameid name =
         -- The non-proxy server will generate a new playerid
         (st2, msg)
 
-maybeGameOver : Board -> RenderInfo -> String -> List Move -> List StonePile -> Message -> ServerPhase -> (Message, ServerPhase)
-maybeGameOver board renderInfo gameid moves unresolvedPiles response phase =
-    if unresolvedPiles == [] then
-        case findFullHomeCircle board renderInfo of
-            Nothing ->
-                (response, phase)
-            Just player ->
-                let reason = HomeCircleFullReason player moves
-                in
-                    ( GameOverRsp { gameid = gameid
-                                  , reason = reason
-                                  }
-                    , GameOverPhase reason
-                    )
-    else
+maybeGameOver : GameState -> Board -> RenderInfo -> String -> List Move -> List StonePile -> Message -> ServerPhase -> (Message, ServerPhase)
+maybeGameOver gameState board renderInfo gameid moves unresolvedPiles response phase =
+    if unresolvedPiles /= [] then
         (response, phase)
+    else
+        if didAllPlayersVoteUnresolvable gameState then
+            ( GameOverRsp { gameid = gameid
+                          , reason = UnresolvableVoteReason
+                          }
+            , GameOverPhase UnresolvableVoteReason
+            )
+        else
+            case findFullHomeCircle board renderInfo of
+                Nothing ->
+                    (response, phase)
+                Just player ->
+                    let reason = HomeCircleFullReason player moves
+                    in
+                        ( GameOverRsp { gameid = gameid
+                                      , reason = reason
+                                      }
+                        , GameOverPhase reason
+                        )
 
 nextResolver : GameState -> Int
 nextResolver gameState =
@@ -810,7 +824,7 @@ placeReq state placeOnly message placement number =
                                                   , placements = placementsList
                                                   }
                                 in
-                                    maybeGameOver board info gameid
+                                    maybeGameOver state board info gameid
                                         placementsList unresolvedPiles
                                         placedRsp phase
                     in
@@ -835,10 +849,10 @@ placeReq state placeOnly message placement number =
                 , errorRsp message IllegalRequestErr "Non-placement move"
                 )
 
-isLegalResolution : Move -> List StonePile -> Bool
-isLegalResolution move piles =
+isLegalResolution : Move -> List StonePile -> Bool -> Bool
+isLegalResolution move piles removeOk =
     case move of
-        Resolution _ from _ ->
+        Resolution stone from to ->
             case LE.find (\pile -> pile.nodeName == from) piles of
                 Nothing ->
                     False
@@ -847,15 +861,35 @@ isLegalResolution move piles =
                         [] ->
                             False
                         moves ->
-                            List.member move moves
+                            if not (removeOk && to == "" && stone /= MoveBlock) then
+                                List.member move moves
+                            else
+                                Nothing /=
+                                    LE.find (\m ->
+                                                 case m of
+                                                     Resolution ms f _ ->
+                                                         ms == stone && f == from
+                                                     _ ->
+                                                         False
+                                            )
+                                        moves
         _ ->
             False
 
 resolveReq : GameState -> Message -> Move -> (GameState, Message)
 resolveReq state message resolution =
     case resolution of
-        Resolution _ _ _ ->
-            if not <| isLegalResolution resolution state.unresolvedPiles then
+        Resolution _ _ to ->
+            if to == "" && not (didAllPlayersVoteUnresolvable state) then
+                ( state
+                , errorRsp message IllegalRequestErr
+                    "Can't remove stones until all players vote unresolvable"
+                )
+            else if not
+                <| isLegalResolution
+                    resolution state.unresolvedPiles
+                    (didAllPlayersVoteUnresolvable state)
+            then
                 ( state
                 , errorRsp message IllegalRequestErr "Illegal Resolution"
                 )
@@ -899,7 +933,7 @@ resolveReq state message resolution =
                                             , resolution = resolution
                                             }
                     (response, phase2) =
-                        maybeGameOver board renderInfo gameid
+                        maybeGameOver state board renderInfo gameid
                             [resolution] unresolvedPiles resolveRsp phase
                 in
                     ( { state
