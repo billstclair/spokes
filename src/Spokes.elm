@@ -1716,7 +1716,7 @@ style_ = node "style"
 
 view : Model -> Html Msg
 view model =
-    center []
+    center [ class "page" ]
         [ style_ [ type_ "text/css"]
               [ text "@import \"style.css\"" ]
         , h2 [] [ text "Spokes" ]

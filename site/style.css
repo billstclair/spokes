@@ -1,10 +1,20 @@
+.page {
+    font-size: medium;
+}
+svg {
+    font-size: medium;
+}
+input {
+    font-size: medium;
+}
 .pagename {
     font-weight: bold;
 }
 .chat {
-    width: 50em;
+    width: 40em;
     height: 6em;
     overflow-y: scroll;
+    font-size: large;
 }
 .resigned {
     text-decoration: line-through;
