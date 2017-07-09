@@ -721,11 +721,13 @@ maybeGameOver gameState board renderInfo gameid moves unresolvedPiles response p
         (response, phase)
     else
         if didAllPlayersVoteUnresolvable gameState then
-            ( GameOverRsp { gameid = gameid
-                          , reason = UnresolvableVoteReason
-                          }
-            , GameOverPhase UnresolvableVoteReason
-            )
+            let reason = UnresolvableVoteReason moves
+            in
+                ( GameOverRsp { gameid = gameid
+                              , reason = reason
+                              }
+                , GameOverPhase reason
+                )
         else
             case findFullHomeCircle board renderInfo of
                 Nothing ->

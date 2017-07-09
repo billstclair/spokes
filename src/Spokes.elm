@@ -74,6 +74,7 @@ type alias Model =
     , newPlayers : Int
     , playerNames : List (Int, String)
     , resignedPlayers : List Int
+    , unresolvablePlayers : List Int
     , turn : Int
     , phase : ServerPhase
     , lastFocus : Int
@@ -123,6 +124,7 @@ initialModel =
     , newPlayers = 2
     , playerNames = []
     , resignedPlayers = []
+    , unresolvablePlayers = []
     , turn = 1
     , phase = StartPhase
     , lastFocus = 1
@@ -291,6 +293,18 @@ update msg model =
             ( { model | placeOnly = placeOnly }
             , Cmd.none
             )
+        SetUnresolvableVote player vote ->
+            let message = UnresolvableVoteReq
+                          { playerid = if model.isLocal then
+                                           toString player
+                                        else
+                                            model.playerid
+                          , vote = vote
+                          }
+            in
+                ( model
+                , send model model.server message
+                )                
         SetRestoreState restoreState ->
             ( { model | restoreState = restoreState }
             , Cmd.none
@@ -831,12 +845,37 @@ serverResponse mod server message =
                             )
                         else
                             addChat m3 <| name ++ " resigned."
+            UnresolvableVoteRsp { gameid, number, vote } ->
+                if gameid /= model.gameid then
+                    ( model, Cmd.none )
+                else
+                    let players = model.unresolvablePlayers
+                        newPlayers = if vote then
+                                         adjoin number players
+                                     else
+                                         LE.remove number players
+                        model2 = { model | unresolvablePlayers = newPlayers }
+                        playerName = if didAllPlayersVoteUnresolvable model2 then
+                                         "Everybody"
+                                     else
+                                         getPlayerName number "Player " model2
+                    in
+                        addChat model2
+                            <| playerName ++ " voted that the game is " ++
+                                (if vote then
+                                     "unresolvable."
+                                 else
+                                     "resolvable."
+                                )
             GameOverRsp { gameid, reason } ->
                 if gameid /= model.gameid then
                     ( model, Cmd.none )
                 else
                     let model2 =
                             case reason of
+                                UnresolvableVoteReason moves ->
+                                    makeGameOverReasonMoves
+                                        model server gameid moves
                                 UnresolvableReason moves ->
                                     makeGameOverReasonMoves
                                         model server gameid moves
@@ -1098,7 +1137,20 @@ resolution maybeMove displayList model history =
 
 maybeMakeMove : String -> StonePile -> Model -> ( Model, Cmd Msg )
 maybeMakeMove nodeName pile model =
-    case findResolution nodeName pile of
+    case 
+        case findResolution nodeName pile of
+            Nothing ->
+                if not (didAllPlayersVoteUnresolvable model) then
+                    Nothing
+                else
+                    case pile.resolutions of
+                        Resolution stone from _ :: _ ->
+                            Just <| Resolution stone from ""
+                        _ ->
+                            Nothing
+            justm ->
+                justm
+    of
         Nothing ->
             ( model, Cmd.none )
         Just move ->
@@ -1195,18 +1247,30 @@ placementLine model =
 
 resolutionLine : Model -> Html Msg
 resolutionLine model =
-    span []
-        [ text <|
-              if model.isLocal then
-                  "Player " ++ (toString model.resolver) ++ " please resolve. "
-              else
-                  if model.resolver == model.playerNumber then
-                      "Please resolve now. "
+    let removeText = if didAllPlayersVoteUnresolvable model then
+                         "You may remove stones. "
+                     else
+                         ""
+    in
+        span []
+            [ text <|
+                  if model.isLocal then
+                      "Player " ++ (toString model.resolver) ++ " please resolve. "
+                          ++ removeText
                   else
-                      (getPlayerName model.resolver "Player " model) ++
-                          " is resolving. "
-        , button [ disabled True ] [ text "Resolve" ]
-        ]
+                      if model.resolver == model.playerNumber then
+                          "Please resolve now. " ++ removeText
+                      else
+                          (getPlayerName model.resolver "Player " model) ++
+                              " is resolving. "
+            , button [ disabled True ]
+                [ text
+                  <| if didAllPlayersVoteUnresolvable model then
+                         "Unresolvable"
+                     else
+                         "Resolve"
+                ]
+            ]
 
 resignedLine : Model -> Html Msg
 resignedLine model =
@@ -1224,10 +1288,8 @@ gameOverReasonText model reason =
         case reason of
             ResignationReason player ->
                 (pname player) ++ " resigned."
-            UnresolvableVoteReason ->
-                -- TODO: Lookup player name or YOU
-                "Player " ++ (toString model.resolver) ++
-                "is resolving after unresolvable vote."
+            UnresolvableVoteReason _ ->
+                "Everyone voted unresolvable."
             UnresolvableReason _ ->
                 "Unresolvable."
             HomeCircleFullReason player _ ->
@@ -1380,102 +1442,158 @@ renderGamePage model =
                   text ""
               else
                   chatParagraph model .chat
-            , p [] [ b [ text "Players: " ]
-                   , radio "players" "2 " (model.newPlayers == 2) nostart
-                       <| SetPlayers 2
-                   , radio "players" "4 " (model.newPlayers == 4) nostart
-                       <| SetPlayers 4
-                   , if model.newIsLocal then
-                         text ""
-                     else
-                         span []
-                             [ input [ type_ "checkbox"
-                                     , onCheck SetIsGlobal
-                                     , checked model.isPublic
-                                     , disabled nostart
+            , p []
+                [ if nostart then
+                      resolutionVoteLine model
+                  else
+                      newGameLine model
+                , br
+                , radio "local" "local" (model.newIsLocal) nostart
+                    <| SetIsLocal True
+                , text doubleSpace
+                , radio "local" "remote" (not model.newIsLocal) nostart
+                    <| SetIsLocal False
+                , text doubleSpace
+                , b [ text <| if model.newIsLocal then
+                                  "Names: "
+                              else
+                                  "Name: "
+                    ]
+                , input [ type_ "text"
+                        , onInput SetName
+                        , disabled nostart
+                        , size 30
+                        , value model.name
+                        ]
+                      []
+                , if model.newIsLocal then
+                      span []
+                          [ br
+                          , input [ type_ "checkbox"
+                                  , onCheck SetPlaceOnly
+                                  , checked model.placeOnly
+                                  ]
+                               []
+                          , text " Place Only"
+                          ]
+                  else
+                      span []
+                          [ br
+                          , b [text " URL: " ]
+                          , input [ type_ "text"
+                                  , onInput <| SetServerUrl
+                                  , disabled (model.newIsLocal || nostart)
+                                  , size 50
+                                  , value model.serverUrl
+                                  ]
+                               []
+                          , br
+                          , b [ text "Game ID: " ]
+                          , if nostart then
+                                span [ style [ ("font-size","140%")
+                                             , ("font-weight","bold")
+                                             ]
                                      ]
-                                   []
-                             , text "public "
-                             ]
-                   , button [ onClick <| if nostart then ResignGame else NewGame
-                            ]
-                       [ text <| if nostart then "Resign Game" else "New Game" ]
-                   , br
-                   , radio "local" "local " (model.newIsLocal) nostart
-                       <| SetIsLocal True
-                   , radio "local" "remote" (not model.newIsLocal) nostart
-                       <| SetIsLocal False
-                   , b [ text <| if model.newIsLocal then
-                                     " Names: "
-                                 else
-                                     " Name: "
-                       ]
-                   , input [ type_ "text"
-                           , onInput SetName
-                           , disabled nostart
-                           , size 30
-                           , value model.name
-                           ]
-                         []
-                   , if model.newIsLocal then
-                         span []
-                             [ br
-                             , input [ type_ "checkbox"
-                                     , onCheck SetPlaceOnly
-                                     , checked model.placeOnly
-                                     ]
-                                 []
-                             , text " Place Only"
-                             ]
-                     else
-                         span []
-                             [ br
-                             , b [text " URL: " ]
-                             , input [ type_ "text"
-                                     , onInput <| SetServerUrl
-                                     , disabled (model.newIsLocal || nostart)
-                                     , size 50
-                                     , value model.serverUrl
-                                     ]
-                                     []
-                             , br
-                             , b [ text "Game ID: " ]
-                             , if nostart then
-                                   span [ style [ ("font-size","140%")
-                                                , ("font-weight","bold")
-                                                ]
-                                        ]
-                                       [ text model.gameid ]
-                               else
-                                   span []
-                                       [ input [ type_ "text"
-                                               , onInput SetGameid
-                                               , disabled nostart
-                                               , size 18
-                                               , value model.newGameid
-                                               ]
-                                             []
-                                       , text " "
-                                       , button [ onClick JoinGame
-                                                , disabled nostart
-                                                ]
-                                             [ text "Join Game" ]
-                                       ]
-                             ]
-                   , br
-                   , input [ type_ "text"
-                           , onInput SetRestoreState
-                           , disabled nostart
-                           , size 60
-                           , value <| encodedRestoreState model nostart
-                           ]
-                         []
-                   , text " "
-                   , button [ onClick RestoreGame
-                            , disabled nostart
-                            ]
-                       [ text "Restore" ]
-                   ]
+                                [ text model.gameid ]
+                            else
+                                span []
+                                    [ input [ type_ "text"
+                                            , onInput SetGameid
+                                            , disabled nostart
+                                            , size 18
+                                            , value model.newGameid
+                                            ]
+                                          []
+                                    , text " "
+                                    , button [ onClick JoinGame
+                                             , disabled nostart
+                                             ]
+                                          [ text "Join Game" ]
+                                    ]
+                          ]
+                , br
+                , input [ type_ "text"
+                        , onInput SetRestoreState
+                        , disabled nostart
+                        , size 60
+                        , value <| encodedRestoreState model nostart
+                        ]
+                      []
+                , text " "
+                , button [ onClick RestoreGame
+                         , disabled nostart
+                         ]
+                      [ text "Restore" ]
+                ]
+            ]
+
+newGameLine : Model -> Html Msg
+newGameLine model =
+    span []
+        [ b [ text "Players: " ]
+        , radio "players" "2 " (model.newPlayers == 2) False
+            <| SetPlayers 2
+        , radio "players" "4 " (model.newPlayers == 4) False
+            <| SetPlayers 4
+        , if model.newIsLocal then
+              text " "
+          else
+              span []
+                  [ input [ type_ "checkbox"
+                          , onCheck SetIsGlobal
+                          , checked model.isPublic
+                          ]
+                        []
+                  , text "public "
+                  ]
+        , button [ onClick NewGame ]
+              [ text "New Game" ]
+        ]
+
+nbsp : String
+nbsp =
+    String.fromChar <| Char.fromCode 160
+
+doubleSpace : String
+doubleSpace =
+    nbsp ++ nbsp
+
+resolutionVoteLine : Model -> Html Msg
+resolutionVoteLine model =
+    span []
+        [ b [ text "Unresolvable: " ]
+        , span []
+            <| List.map (unresolvableCheckBox model)
+                <| List.range 1 model.players
+        , button [ onClick ResignGame ]
+              [ text "Resign Game" ]
+        ]
+
+getUnresolvableVote : Model -> Int -> Bool
+getUnresolvableVote model player =
+    List.member player model.unresolvablePlayers
+
+didAllPlayersVoteUnresolvable : Model -> Bool
+didAllPlayersVoteUnresolvable model =
+    List.length model.unresolvablePlayers == model.players
+
+unresolvableCheckBox : Model -> Int -> Html Msg
+unresolvableCheckBox model player =
+    let name = getPlayerName player "Player " model
+        isDisabled = model.phase /= ResolutionPhase ||
+                     didAllPlayersVoteUnresolvable model ||
+                     not (model.isLocal || model.playerNumber == player)
+    in
+        span []
+            [ input [ type_ "checkbox"
+                    , onCheck <| SetUnresolvableVote player
+                    , checked <| getUnresolvableVote model player
+                    , disabled isDisabled 
+                    ]
+                  []
+            , text " "
+            , text name
+            , text doubleSpace
             ]
 
 chatParagraph : Model -> (Model -> String) -> Html Msg

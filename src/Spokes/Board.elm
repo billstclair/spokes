@@ -907,7 +907,16 @@ makeMove move board =
         Resolution moved from to ->
             case getNode from board of
                 Nothing ->
-                    board
+                    if from == "" then
+                        case getNode to board of
+                            Nothing ->
+                                board
+                            Just toNode ->
+                                let tn = moveStones moved 1 toNode
+                                in
+                                    setNode to tn board
+                    else
+                        board
                 Just fromNode ->
                     if to == "" then
                         let fn = moveStones moved -1 fromNode

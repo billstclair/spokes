@@ -139,6 +139,10 @@ protocolData =
                   , reason = UnresolvableReason [ Resolution MoveWhite "D1" "1" ]
                   }
     , GameOverRsp { gameid = "asdf"
+                  , reason = UnresolvableVoteReason
+                             [ Resolution MoveWhite "D1" "" ]
+                  }
+    , GameOverRsp { gameid = "asdf"
                   , reason = HomeCircleFullReason
                              1
                              [ Placement White "C2"

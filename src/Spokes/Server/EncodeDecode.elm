@@ -196,7 +196,11 @@ stringToGameOverReason string number placements resolution =
                         Err _ -> UnknownReason string
                         Ok i -> ResignationReason i
         "unresolvablevote" ->
-            UnresolvableVoteReason
+            case resolution of
+                Nothing ->
+                    UnknownReason string
+                Just move ->
+                    UnresolvableVoteReason [move]
         "unresolvable" ->
             case placements of
                 Nothing ->
@@ -245,8 +249,10 @@ gameOverReasonToString reason =
     case reason of
         ResignationReason n ->
             ("resignation", Just (toString n), Nothing, Nothing)
-        UnresolvableVoteReason ->
-            ("unresolvablevote", Nothing, Nothing, Nothing)
+        UnresolvableVoteReason moves ->
+            let (placements, resolution) = movesToPlacementsOrResolution moves
+            in
+                ("unresolvablevote", Nothing, placements, resolution)
         UnresolvableReason moves ->
             let (placements, resolution) = movesToPlacementsOrResolution moves
             in

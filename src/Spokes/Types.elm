@@ -47,6 +47,7 @@ type Msg
     | SetGameid String
     | SetServerUrl String
     | SetPlaceOnly Bool
+    | SetUnresolvableVote Int Bool
     | SetRestoreState String
     | NewGame
     | RestoreGame
@@ -260,7 +261,7 @@ fromBitmap int =
 
 type GameOverReason
     = ResignationReason Int
-    | UnresolvableVoteReason
+    | UnresolvableVoteReason (List Move)
     | UnresolvableReason (List Move)
     | HomeCircleFullReason Int (List Move)
     | TimeoutReason
