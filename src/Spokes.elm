@@ -856,12 +856,13 @@ serverResponse mod server message =
                                          LE.remove number players
                         model2 = { model | unresolvablePlayers = newPlayers }
                         playerName = if didAllPlayersVoteUnresolvable model2 then
-                                         "Everybody"
+                                         "Everybody agreed"
                                      else
-                                         getPlayerName number "Player " model2
+                                         (getPlayerName number "Player " model2)
+                                             ++ " voted"
                     in
                         addChat model2
-                            <| playerName ++ " voted that the game is " ++
+                            <| playerName ++ " that the game is " ++
                                 (if vote then
                                      "unresolvable."
                                  else
