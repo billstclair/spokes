@@ -64,6 +64,7 @@ emptyGameState =
     , players = 2
     , resignedPlayers = []
     , votedUnresolvable = []
+    , removeStoneVotes = Nothing
     , turn = 1
     , resolver = 1
     , placements = Dict.empty
@@ -331,6 +332,54 @@ processServerMessage state message =
                                   }
                                 , message
                                 )
+        RemoveStoneVoteReq { playerid, resolution, vote } ->
+            case checkPlayerid state message playerid ResolutionPhase of
+                Err err ->
+                    (state, err)
+                Ok (gameState, number) ->
+                    case gameState.removeStoneVotes of
+                        Nothing ->
+                            ( state
+                            , errorRsp message IllegalRequestErr
+                                "There is no outstanding stone removal vote."
+                            )
+                        Just { resolution, players } ->
+                            if not vote then
+                                updateGameState state
+                                    ( { gameState | removeStoneVotes = Nothing }
+                                    , RemoveStoneVoteRsp
+                                        { gameid = gameState.gameid
+                                        , number = number
+                                        , resolution = resolution
+                                        , vote = False
+                                        }
+                                    )
+                            else
+                                let ps = Types.adjoin number players
+                                in
+                                    if List.length ps == gameState.players then
+                                        updateGameState state
+                                            <| doResolution
+                                                { gameState
+                                                    | removeStoneVotes = Nothing
+                                                }
+                                                resolution
+                                    else
+                                        updateGameState state
+                                            ( { gameState |
+                                                    removeStoneVotes =
+                                                        Just
+                                                        { resolution = resolution
+                                                        , players = ps
+                                                        }
+                                              }
+                                            , RemoveStoneVoteRsp
+                                                { gameid = gameState.gameid
+                                                , number = number
+                                                , resolution = resolution
+                                                , vote = True
+                                                }
+                                            )
         -- Public games
         GamesReq ->
             ( state
@@ -882,7 +931,12 @@ resolveReq : GameState -> Message -> Move -> (GameState, Message)
 resolveReq state message resolution =
     case resolution of
         Resolution _ _ to ->
-            if to == "" && not (didAllPlayersVoteUnresolvable state) then
+            if state.removeStoneVotes /= Nothing then
+                ( state
+                , errorRsp message IllegalRequestErr
+                    "Stone removal vote outstanding"
+                )
+            else if to == "" && not (didAllPlayersVoteUnresolvable state) then
                 ( state
                 , errorRsp message IllegalRequestErr
                     "Can't remove stones until all players vote unresolvable"
@@ -895,63 +949,81 @@ resolveReq state message resolution =
                 ( state
                 , errorRsp message IllegalRequestErr "Illegal Resolution"
                 )
+            else if to == "" then
+                ( { state
+                      | removeStoneVotes =
+                        Just { resolution = resolution
+                             , players = [ state.resolver ]
+                             }
+                  }
+                , RemoveStoneVoteRsp
+                    { gameid = state.gameid
+                    , number = state.resolver
+                    , resolution = resolution
+                    , vote = True
+                    }
+                )
             else
-                let board = makeMove resolution state.board
-                    renderInfo = state.renderInfo
-                    displayList = computeDisplayList board renderInfo
-                    unresolvedPiles = displayList.unresolvedPiles
-                    done = (unresolvedPiles == [])
-                    phase = if done then
-                                PlacementPhase
-                            else
-                                ResolutionPhase
-                    turn = if done then
-                               state.turn + 1
-                           else
-                               state.turn
-                    resolver = if done then
-                                   nextResolver state
-                               else
-                                   state.resolver
-                    his = case state.history of
-                              turn :: tail ->
-                                  { turn
-                                      | resolutions =
-                                        List.append
-                                        turn.resolutions [resolution]
-                                  } :: tail
-                              _ ->
-                                  state.history
-                    history = if done then
-                                  { number = turn
-                                  , resolver = resolver
-                                  , placements = []
-                                  , resolutions = []
-                                  } :: his
-                              else
-                                  his
-                    gameid = state.gameid
-                    resolveRsp = ResolveRsp { gameid = gameid
-                                            , resolution = resolution
-                                            }
-                    (response, phase2) =
-                        maybeGameOver state board renderInfo gameid
-                            [resolution] unresolvedPiles resolveRsp phase
-                in
-                    ( { state
-                          | board = board
-                          , phase = phase2
-                          , unresolvedPiles = unresolvedPiles
-                          , turn = turn
-                          , resolver = resolver
-                          , history = history
-                      }
-                    , response
-                    )
+                doResolution state resolution
         _ ->
             ( state
             , errorRsp message IllegalRequestErr "Non-resolution move"
             )
+
+doResolution : GameState -> Move -> (GameState, Message)
+doResolution state resolution =
+    let board = makeMove resolution state.board
+        renderInfo = state.renderInfo
+        displayList = computeDisplayList board renderInfo
+        unresolvedPiles = displayList.unresolvedPiles
+        done = (unresolvedPiles == [])
+        phase = if done then
+                    PlacementPhase
+                else
+                    ResolutionPhase
+        turn = if done then
+                   state.turn + 1
+               else
+                   state.turn
+        resolver = if done then
+                       nextResolver state
+                   else
+                       state.resolver
+        his = case state.history of
+                  turn :: tail ->
+                      { turn
+                          | resolutions =
+                            List.append
+                            turn.resolutions [resolution]
+                      } :: tail
+                  _ ->
+                      state.history
+        history = if done then
+                      { number = turn
+                      , resolver = resolver
+                      , placements = []
+                      , resolutions = []
+                      } :: his
+                  else
+                      his
+        gameid = state.gameid
+        resolveRsp = ResolveRsp { gameid = gameid
+                                , resolution = resolution
+                                }
+        (response, phase2) =
+            maybeGameOver state board renderInfo gameid
+                [resolution] unresolvedPiles resolveRsp phase
+    in
+        ( { state
+              | board = board
+              , phase = phase2
+              , unresolvedPiles = unresolvedPiles
+              , turn = turn
+              , resolver = resolver
+              , history = history
+          }
+        , response
+        )
 
 undoReq : GameState -> Message -> (GameState, Message)
 undoReq state undoMessage =

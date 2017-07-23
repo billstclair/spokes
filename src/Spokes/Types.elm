@@ -369,6 +369,11 @@ type alias ServerState =
     , publicGames : PublicGames
     }
 
+type alias RemoveStoneVotes =
+    { resolution : Move
+    , players : List Int
+    }
+
 type alias GameState =
     { board : Board
     , restoreState : Maybe RestoreState
@@ -378,6 +383,7 @@ type alias GameState =
     , players : Int
     , resignedPlayers : List Int
     , votedUnresolvable : List Int
+    , removeStoneVotes : Maybe RemoveStoneVotes
     , turn : Int
     , resolver : Int
     , placements : Dict Int Move
