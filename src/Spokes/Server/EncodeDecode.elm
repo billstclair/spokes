@@ -431,6 +431,25 @@ parseRequest msg params rawMessage =
                                 UnresolvableVoteReq { playerid = pid
                                                     , vote = v
                                                     }
+        "removestonevote" ->
+            let { playerid, resolution, vote } = params
+            in
+                case playerid of
+                    Nothing ->
+                        rawMessage
+                    Just pid ->
+                        case resolution of
+                            Nothing ->
+                                rawMessage
+                            Just res ->
+                                case vote of
+                                    Nothing ->
+                                        rawMessage
+                                    Just v ->
+                                        RemoveStoneVoteReq { playerid = pid
+                                                           , resolution = res
+                                                           , vote = v
+                                                           }
         "chat" ->
             let { playerid, text } = params
             in
@@ -586,6 +605,30 @@ parseResponse msg params rawMessage =
                                                             , number = n
                                                             , vote = v
                                                             }
+        "removestonevote" ->
+            let { gameid, number, resolution, vote } = params
+            in
+                case gameid of
+                    Nothing ->
+                        rawMessage
+                    Just gid ->
+                        case number of
+                            Nothing ->
+                                rawMessage
+                            Just num ->
+                                case resolution of
+                                    Nothing ->
+                                        rawMessage
+                                    Just res ->
+                                        case vote of
+                                            Nothing ->
+                                                rawMessage
+                                            Just v ->
+                                                RemoveStoneVoteRsp { gameid = gid
+                                                                   , number = num
+                                                                   , resolution = res
+                                                                   , vote = v
+                                                                   }
         "gameover" ->
             let { gameid, reason } = params
             in
@@ -875,6 +918,27 @@ messageEncoder message =
                 , ("number", toString number)
                 , ("vote", if vote then "true" else "false")
                 ]
+        RemoveStoneVoteReq { playerid, resolution, vote } ->
+            let (color, from, to) = resolutionToStrings resolution
+            in
+                messageValue "req" "removestonevote"
+                    [ ("playerid", playerid)
+                    , ("color", color)
+                    , ("from", from)
+                    , ("to", to)
+                    , ("vote", if vote then "true" else "false")
+                    ]
+        RemoveStoneVoteRsp { gameid, number, resolution, vote } ->
+            let (color, from, to) = resolutionToStrings resolution
+            in
+                messageValue "rsp" "removestonevote"
+                    [ ("gameid", gameid)
+                    , ("number", toString number)
+                    , ("color", color)
+                    , ("from", from)
+                    , ("to", to)
+                    , ("vote", if vote then "true" else "false")
+                    ]
         GameOverRsp { gameid, reason } ->
             let (s, number, placements, resolution) = gameOverReasonToString reason
                 params = case placements of

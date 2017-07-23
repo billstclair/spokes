@@ -129,6 +129,15 @@ protocolData =
                 }
     , UnresolvableVoteReq { playerid = "p1", vote = True }
     , UnresolvableVoteRsp { gameid = "asdf", number = 1, vote = False }
+    , RemoveStoneVoteReq { playerid = "p2"
+                         , resolution = Resolution MoveWhite "D1" ""
+                         , vote = True
+                         }
+    , RemoveStoneVoteRsp { gameid = "asdf"
+                         , number = 2
+                         , resolution = Resolution MoveWhite "D1" ""
+                         , vote = True
+                         }
     , GameOverRsp { gameid = "asdf", reason = ResignationReason 2 }
     , GameOverRsp { gameid = "asdf"
                   , reason = UnresolvableReason [ Placement White "C1"

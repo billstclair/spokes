@@ -325,6 +325,15 @@ type Message
     | ResignRsp { gameid : String, number: Int, placements : Maybe (List Move) }
     | UnresolvableVoteReq { playerid : String, vote : Bool }
     | UnresolvableVoteRsp { gameid : String, number : Int, vote : Bool }
+    | RemoveStoneVoteReq { playerid : String
+                         , resolution : Move
+                         , vote : Bool
+                         }
+    | RemoveStoneVoteRsp { gameid : String
+                         , number : Int
+                         , resolution : Move
+                         , vote : Bool
+                         }
     | GameOverRsp { gameid : String, reason: GameOverReason }
     -- Public games
     | GamesReq
