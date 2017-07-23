@@ -576,8 +576,16 @@ processResign state gameid number resignedPlayers =
                                   , number = number
                                   , placements = Nothing
                                   }
+        removeStoneVotes = case state.removeStoneVotes of
+                               Nothing ->
+                                   Nothing
+                               Just { resolution, players } ->
+                                   Just { resolution = resolution
+                                        , players = Types.adjoin number players
+                                        }
         state2 = { state
                      | resignedPlayers = resignedPlayers
+                     , removeStoneVotes = removeStoneVotes
                  }
         phase = state.phase
         resolver = state2.resolver
@@ -953,7 +961,7 @@ resolveReq state message resolution =
                 ( { state
                       | removeStoneVotes =
                         Just { resolution = resolution
-                             , players = [ state.resolver ]
+                             , players = state.resolver :: state.resignedPlayers
                              }
                   }
                 , RemoveStoneVoteRsp
