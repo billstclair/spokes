@@ -41,6 +41,7 @@ type Msg
     | SendChat
     | ChatKeydown Int
     | ChatScroll Float
+    | SetChatSize Int
     | SetPlayers Int
     | SetIsLocal Bool
     | SetIsGlobal Bool

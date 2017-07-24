@@ -68,6 +68,7 @@ main =
 
 type alias Model =
     { page : Page
+    , chatFontSize: Int
     , history : History
     , board : Board
     , renderInfo : RenderInfo
@@ -116,9 +117,14 @@ placeOnly model =
 initialInputs : Array String
 initialInputs = Array.repeat 4 ""
 
+defaultChatFontSize : Int
+defaultChatFontSize =
+    20
+
 initialModel : Model
 initialModel =
     { page = GamePage
+    , chatFontSize = defaultChatFontSize
     , history = [ newTurn 1 1 ]
     , board = Board.initialBoard
     , renderInfo = Board.renderInfo 600
@@ -260,6 +266,19 @@ update msg model =
                     ( model
                     , Cmd.none
                     )                    
+        SetChatSize dir ->
+            let size = model.chatFontSize
+                inc = 4
+                newsize = if dir > 0 then
+                              size + inc
+                          else if dir == 0 then
+                              defaultChatFontSize
+                          else
+                              size - inc
+            in
+                ( { model | chatFontSize = newsize }
+                , Cmd.none
+                )
         SetPage page ->
             if page == PublicPage then
                 switchToPublicPage model
@@ -525,7 +544,8 @@ newGame model restoreState =
             processRestoreState initialModel restoreState
     in                             
         ( { initialModel
-              | board = board
+              | chatFontSize = model.chatFontSize
+              , board = board
               , displayList = displayList
               , resolver = resolver
               , restoreState = model.restoreState
@@ -563,7 +583,8 @@ joinGame model gameid =
             )
         else
             ( { initialModel
-                  | restoreState = model.restoreState
+                  | chatFontSize = model.chatFontSize
+                  , restoreState = model.restoreState
                   , name = model.name
                   , isLocal = isLocal
                   , newIsLocal = isLocal
@@ -1737,12 +1758,34 @@ unresolvableCheckBox model player =
 chatParagraph : Model -> (Model -> String) -> Html Msg
 chatParagraph model accessor =
     p []
-        [ textarea [ id "chat"
-                   , class "chat"
-                   , readonly True
-                   ]
-              -- TODO: make player names bold.
-              [ text <| accessor model ]
+        [ table []
+              [ tr []
+                    [ td [ class "chatsizecolumn" ]
+                          [ button [ class "chatsizebutton"
+                                   , onClick <| SetChatSize 1
+                                   , title "Increase chat size"]
+                                [ text "^" ]
+                          , br
+                          , button [ class "chatsizebutton"
+                                   , onClick <| SetChatSize 0
+                                   , title "Default chat size" ]
+                              [ text "O" ]
+                          , br
+                          , button [ class "chatsizebutton"
+                                   , onClick <| SetChatSize -1
+                                   , title "Decrease chat size" ]
+                              [ text "v" ]
+                          ]
+                    , td []
+                        [ textarea [ id "chat"
+                                   , class "chat"
+                                   , readonly True
+                                   ]
+                              -- TODO: make player names bold.
+                              [ text <| accessor model ]
+                        ]
+                    ]
+              ]
         , br
         , b [ text "Chat: " ]
         , input [ type_ "text"
@@ -1851,11 +1894,19 @@ pageLinks currentPage =
 
 style_ = node "style"
 
+chatFontSizeText : Model -> String
+chatFontSizeText model =
+    ".chat { font-size: " ++
+    (toString model.chatFontSize) ++
+    "px; }"
+
 view : Model -> Html Msg
 view model =
     center [ class "page" ]
         [ style_ [ type_ "text/css"]
               [ text "@import \"style.css\"" ]
+        , style_ [ type_ "text/css"]
+            [ text <| chatFontSizeText model ]
         , h2 [] [ text "Spokes" ]
         , p [] [ pageLinks model.page ]
         , case model.page of

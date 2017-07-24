@@ -11,10 +11,17 @@ input {
     font-weight: bold;
 }
 .chat {
-    width: 40em;
+    width: 600px;
     height: 6em;
     overflow-y: scroll;
     font-size: large;
+}
+.chatsizebutton {
+    font-weight: bold;
+}
+.chatsizecolumn {
+    text-align: center;
+    vertical-align: top;
 }
 .resigned {
     text-decoration: line-through;
