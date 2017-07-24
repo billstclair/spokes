@@ -1,6 +1,6 @@
 The game of Spokes.
 
-See [site/docs/rules.html](site/docs/rules.html) for rules and [site/docs/help.html](site/docs/help.html) for instructions.
+See [site/docs/rules.html](site/docs/rules.html) ([web page](https://gibgoygames.com/spokes/docs/rules.html)) for rules and [site/docs/help.html](site/docs/help.html) ([web page](https://gibgoygames.com/spokes/docs/help.html)) for instructions.
 
 Invented by Chris St. Clair.
 
