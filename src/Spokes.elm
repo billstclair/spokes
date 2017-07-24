@@ -418,19 +418,18 @@ update msg model =
                         else
                             let c = colorLetter model.inputColor
                                 input = c ++ nodeName
+                                m2 = { model
+                                         | inputs
+                                           = Array.set
+                                           (model.lastFocus-1) input model.inputs
+                                         , lastFocus
+                                           = if model.isLocal then
+                                                 1 + (model.lastFocus % model.players)
+                                             else
+                                                 model.lastFocus
+                                     }
                             in
-                                ( { model
-                                      | inputs
-                                        = Array.set
-                                        (model.lastFocus-1) input model.inputs
-                                      , lastFocus
-                                        = if model.isLocal then
-                                              (model.lastFocus % model.players) + 1
-                                          else
-                                              model.lastFocus
-                                  }
-                                , Cmd.none
-                                )
+                                update Place m2
                     Just pile ->
                         maybeMakeMove nodeName pile model
         PileClick pile ->
