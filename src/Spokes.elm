@@ -20,10 +20,12 @@ import Spokes.Types as Types exposing ( Page(..), Msg(..), Board, RenderInfo
                                       , Message(..)
                                       , GameOverReason(..), RestoreState
                                       , PublicGames, PublicGame, emptyPublicGames
+                                      , RemoveStoneVotes
                                       , movedStoneString, butLast, adjoin
                                       )
 import Spokes.Board as Board exposing ( render, isLegalPlacement, makeMove
                                       , computeDisplayList, findResolution
+                                      , computeResolutionPile
                                       , placementText, colorLetter
                                       )
 import Spokes.Server.EncodeDecode exposing ( decodeMessage
@@ -75,6 +77,7 @@ type alias Model =
     , playerNames : List (Int, String)
     , resignedPlayers : List Int
     , unresolvablePlayers : List Int
+    , removeStoneVotes : Maybe RemoveStoneVotes
     , turn : Int
     , phase : ServerPhase
     , lastFocus : Int
@@ -125,6 +128,7 @@ initialModel =
     , playerNames = []
     , resignedPlayers = []
     , unresolvablePlayers = []
+    , removeStoneVotes = Nothing
     , turn = 1
     , phase = StartPhase
     , lastFocus = 1
@@ -305,6 +309,23 @@ update msg model =
                 ( model
                 , send model model.server message
                 )                
+        SetRemoveStoneVote player vote ->
+            case model.removeStoneVotes of
+                Nothing ->
+                    ( model, Cmd.none )
+                Just { resolution } ->
+                    let message = RemoveStoneVoteReq
+                                  { playerid = if model.isLocal then
+                                                   toString player
+                                               else
+                                                   model.playerid
+                                  , resolution = resolution
+                                  , vote = vote
+                                  }
+                    in
+                        ( model
+                        , send model model.server message
+                        )
         SetRestoreState restoreState ->
             ( { model | restoreState = restoreState }
             , Cmd.none
@@ -790,17 +811,26 @@ serverResponse mod server message =
                     displayList = computeDisplayList board model.renderInfo
                     (resolver, phase, history) =
                         resolution (Just move) displayList model model.history
+                    m2 = { model
+                             | history = history
+                             , board = board
+                             , displayList = displayList
+                             , removeStoneVotes = Nothing
+                             , selectedPile = Nothing
+                             , resolver = resolver
+                             , phase = phase
+                         }
                 in
-                    ( { model
-                          | history = history
-                          , board = board
-                          , displayList = displayList
-                          , selectedPile = Nothing
-                          , resolver = resolver
-                          , phase = phase
-                      }
-                    , Cmd.none
-                    )
+                    case model.removeStoneVotes of
+                        Nothing ->
+                            ( m2, Cmd.none )
+                        Just { resolution } ->
+                            case resolution of
+                                Resolution _ from _ ->
+                                    addChat m2
+                                        ("Everyone agreed. Removing " ++ from ++ ".")
+                                _ ->
+                                    ( m2, Cmd.none )
             ResponseCountRsp { gameid, number, restoreState } ->
                 if gameid /= model.gameid then
                     ( model, Cmd.none )
@@ -868,6 +898,57 @@ serverResponse mod server message =
                                  else
                                      "resolvable."
                                 )
+            RemoveStoneVoteRsp { gameid, number, resolution, vote } ->
+                if gameid /= model.gameid then
+                    ( model, Cmd.none )
+                else
+                    let playerName = getPlayerName number "Player " model
+                        isYou = model.isLocal || (number == model.playerNumber)
+                        isResolving = model.isLocal ||
+                                      (model.playerNumber == model.resolver)
+                        stone = case resolution of
+                                    Resolution _ s _ -> s
+                                    _ -> "the stone" --can't happen
+                    in
+                        if not vote then
+                            let msg = (playerName ++
+                                           " voted against removing " ++
+                                           stone ++ "."
+                                      )
+                                      ++ (if isResolving then
+                                              " Continue resolving."
+                                          else
+                                              ""
+                                         )
+                            in
+                                addChat { model | removeStoneVotes = Nothing } msg
+                    else
+                        let msg = if model.removeStoneVotes == Nothing then
+                                      if isResolving then
+                                          "Waiting for agreement on removing " ++
+                                              stone ++ "."
+                                      else
+                                          playerName ++
+                                              " wants to remove " ++
+                                              stone ++
+                                              ". Please vote below."
+                                  else
+                                      playerName ++ " voted to remove " ++
+                                          stone ++ "."                            
+                        in
+                            addChat
+                            { model | removeStoneVotes =
+                                  case model.removeStoneVotes of
+                                      Nothing ->
+                                          Just { resolution = resolution
+                                               , players = [number]
+                                               }
+                                      Just { players } ->
+                                          Just { resolution = resolution
+                                               , players = Types.adjoin number players
+                                               }
+                            }
+                            msg
             GameOverRsp { gameid, reason } ->
                 if gameid /= model.gameid then
                     ( model, Cmd.none )
@@ -1435,9 +1516,20 @@ renderGamePage model =
                                , resolver = Just model.resolver
                                , placement = model.placement
                            }
+                      selectedPile =
+                          case model.removeStoneVotes of
+                              Nothing ->
+                                  model.selectedPile
+                              Just { resolution } ->
+                                  if model.isLocal ||
+                                      (model.resolver == model.playerNumber)
+                                  then
+                                      model.selectedPile
+                                  else
+                                      computeResolutionPile
+                                          model.board model.renderInfo resolution
                   in
-                      Board.render
-                      model.selectedPile model.displayList ri
+                      Board.render selectedPile model.displayList ri
                 ]
             , if model.newIsLocal then
                   text ""
@@ -1562,13 +1654,59 @@ doubleSpace =
 resolutionVoteLine : Model -> Html Msg
 resolutionVoteLine model =
     span []
-        [ b [ text "Unresolvable: " ]
-        , span []
-            <| List.map (unresolvableCheckBox model)
-                <| List.range 1 model.players
+        [ case model.removeStoneVotes of
+              Nothing ->
+                  span []
+                      [ b [ text "Unresolvable: " ]
+                      , span []
+                          <| List.map (unresolvableCheckBox model)
+                              <| List.range 1 model.players
+                      ]
+              Just { resolution, players } ->
+                  let node = case resolution of
+                                 Resolution _ from _ ->
+                                     from
+                                 _ ->
+                                     "<error>"
+                  in
+                      span []
+                          [ b [ text <| "Is " ++ node ++ " involved in a loop? " ]
+                          , button [ onClick <|
+                                         SetRemoveStoneVote model.playerNumber False
+                                   ]
+                              [ text "No" ]
+                          , span []
+                              <| List.map (removeStoneCheckbox model)
+                                  <| List.range 1 model.players
+                          ]                  
         , button [ onClick ResignGame ]
               [ text "Resign Game" ]
         ]
+
+getRemoveStoneVote : Model -> Int -> Bool
+getRemoveStoneVote model player =
+    case model.removeStoneVotes of
+        Nothing ->
+            False
+        Just { players } ->
+            List.member player players
+
+removeStoneCheckbox : Model -> Int -> Html Msg
+removeStoneCheckbox model player =
+    let name = getPlayerName player "Player " model
+        isDisabled = (not model.isLocal) && (player /= model.playerNumber)
+    in
+        span []
+            [ input [ type_ "checkbox"
+                    , onCheck <| SetRemoveStoneVote player
+                    , checked <| getRemoveStoneVote model player
+                    , disabled isDisabled 
+                    ]
+                  []
+            , text " "
+            , text name
+            , text doubleSpace
+            ]
 
 getUnresolvableVote : Model -> Int -> Bool
 getUnresolvableVote model player =

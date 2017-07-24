@@ -15,6 +15,7 @@ module Spokes.Types exposing ( Page(..), Msg(..), Board, Node
                              , Move(..), Turn, History, newTurn
                              , StonePile, DisplayList
                              , Message(..), ServerPhase(..), GameOverReason(..)
+                             , RemoveStoneVotes
                              , GameState, ServerState, ServerInterface(..)
                              , RestoreState
                              , PublicGames, PublicGame, emptyPublicGames
@@ -48,6 +49,7 @@ type Msg
     | SetServerUrl String
     | SetPlaceOnly Bool
     | SetUnresolvableVote Int Bool
+    | SetRemoveStoneVote Int Bool
     | SetRestoreState String
     | NewGame
     | RestoreGame

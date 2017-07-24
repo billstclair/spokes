@@ -14,6 +14,7 @@ module Spokes.Board exposing ( initialBoard, renderInfo, render
                              , parsePlacementMove, placementText, colorLetter
                              , isLegalMove, isLegalPlacement, makeMove, undoMove
                              , computeDisplayList, findResolution
+                             , computeResolutionPile
                              , canResolve, makePlacements
                              , isHomeCircleFull, findFullHomeCircle
                              , stringToBoard, boardToString
@@ -1428,6 +1429,75 @@ uniqueMoves moves =
     in
         loop moves []
 
+computeResolutionPile : Board -> RenderInfo -> Move -> Maybe StonePile
+computeResolutionPile board info move =
+    case move of
+        Resolution stone from _ ->
+            case getNode from board of
+                Nothing ->
+                    Nothing
+                Just node ->
+                    let locs = info.locations
+                        slocs = info.stoneLocations
+                        piles = drawNode board node locs slocs False
+                        match = (\pile ->
+                                     let m = (\move ->
+                                                  case move of
+                                                      Resolution s f _ ->
+                                                          stone == s && from == f
+                                                      _ ->
+                                                          False
+                                             )
+                                     in
+                                         case LE.find m pile.resolutions of
+                                             Nothing -> False
+                                             Just _ -> True
+                                )                                     
+                    in
+                        LE.find match piles
+        _ ->
+            Nothing
+
+-- TODO: if there are any forced resolutions, don't process unforced.
+drawPile : Board -> Node -> Point -> List String -> List String -> Bool -> StonePile
+drawPile board node p stones otherStones hasForced =
+    let resolutions = computeResolutions
+                      node stones otherStones board hasForced
+        maybeRes = if resolutions == [] then
+                       []
+                   else
+                       uniqueMoves resolutions
+    in
+        case stones of
+            [] ->
+                emptyStonePile
+            _ ->
+                { nodeName = node.name
+                , colors = stones
+                , location = p
+                , resolutions = maybeRes
+                }
+
+drawNode : Board -> Node -> Dict String Point -> Dict String (Point, Point) -> Bool -> List StonePile
+drawNode board node locs slocs hasForced =
+    let name = node.name
+        p = Maybe.withDefault zeroPoint
+            <| Dict.get name locs
+        (sp1, sp2) = Maybe.withDefault (zeroPoint, zeroPoint)
+                     <| Dict.get name slocs
+        ws = node.whiteStones
+        bs = node.blackStones
+    in
+        case partitionStones bs ws of
+            [] ->
+                []
+            [ stones ] ->
+                [ drawPile board node p stones [] hasForced ]
+            s1 :: s2 :: _ ->
+                [ drawPile board node sp1 s1 [] hasForced
+                , drawPile board node sp2 s2 s1 hasForced
+                ]
+
 hasForcedResolutions : Node -> Bool
 hasForcedResolutions node =
     node.whiteStones > 1 || node.blackStones > 1
@@ -1442,47 +1512,8 @@ computeDisplayList board info =
         hasForced = case LE.find hasForcedResolutions nodes of
                         Nothing -> False
                         Just _ -> True
-        -- TODO: if there are any forced resolutions, don't process unforced.
-        drawPile : Node -> Point -> List String -> List String -> StonePile
-        drawPile = (\node p stones otherStones ->
-                        let resolutions = computeResolutions
-                                          node stones otherStones board hasForced
-                            maybeRes = if resolutions == [] then
-                                           []
-                                       else
-                                           uniqueMoves resolutions
-                        in
-                            case stones of
-                                [] ->
-                                    emptyStonePile
-                                _ ->
-                                    { nodeName = node.name
-                                    , colors = stones
-                                    , location = p
-                                    , resolutions = maybeRes
-                                    }
-                   )
-        drawNode : Node -> List StonePile
-        drawNode = (\node ->
-                          let name = node.name
-                              p = Maybe.withDefault zeroPoint
-                                    <| Dict.get name locs
-                              (sp1, sp2) = Maybe.withDefault (zeroPoint, zeroPoint)
-                                           <| Dict.get name slocs
-                              ws = node.whiteStones
-                              bs = node.blackStones
-                          in
-                              case partitionStones bs ws of
-                                  [] ->
-                                      []
-                                  [ stones ] ->
-                                      [ drawPile node p stones [] ]
-                                  s1 :: s2 :: _ ->
-                                      [ drawPile node sp1 s1 []
-                                      , drawPile node sp2 s2 s1
-                                      ]
-                   )
-        allPiles = List.concatMap drawNode nodes
+        drawOneNode = (\node -> drawNode board node locs slocs hasForced)
+        allPiles = List.concatMap drawOneNode nodes
         unresolved = List.filter (\pile -> pile.resolutions /= []) allPiles
     in
         { allPiles = allPiles
