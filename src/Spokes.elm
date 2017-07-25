@@ -1755,27 +1755,26 @@ unresolvableCheckBox model player =
             , text doubleSpace
             ]
 
+chatSizeButton : (Int, String, String) -> List (Html Msg)
+chatSizeButton (size, title_, label) =
+    [ button [ class "chatsizebutton"
+             , onClick <| SetChatSize size
+             , title title_]
+          [ text label ]
+    , br
+    ]
+
 chatParagraph : Model -> (Model -> String) -> Html Msg
 chatParagraph model accessor =
     p []
         [ table []
               [ tr []
                     [ td [ class "chatsizecolumn" ]
-                          [ button [ class "chatsizebutton"
-                                   , onClick <| SetChatSize 1
-                                   , title "Increase chat size"]
-                                [ text "^" ]
-                          , br
-                          , button [ class "chatsizebutton"
-                                   , onClick <| SetChatSize 0
-                                   , title "Default chat size" ]
-                              [ text "O" ]
-                          , br
-                          , button [ class "chatsizebutton"
-                                   , onClick <| SetChatSize -1
-                                   , title "Decrease chat size" ]
-                              [ text "v" ]
-                          ]
+                          <| List.concatMap chatSizeButton
+                              [ (1, "Increase chat size", "^")
+                              , (0, "Default chat size", "O")
+                              , (-1, "Decrease chat size", "v")
+                              ]
                     , td []
                         [ textarea [ id "chat"
                                    , class "chat"
