@@ -994,7 +994,7 @@ serverResponse mod server message =
                                         adjoin p model.resignedPlayers
                                     _ ->
                                         model.resignedPlayers
-                              , restoreState = createRestoreState model
+                              , restoreState = createRestoreState model2
                               , phase = GameOverPhase reason
                               , newGameid = ""
                               , nextResponseCountTime = Nothing
@@ -1626,8 +1626,10 @@ renderGamePage model =
                           ]
                 , br
                 , input [ type_ "text"
-                        , onInput SetRestoreState
-                        , disabled nostart
+                        , onInput <| if nostart then
+                                         (\_ -> Noop)
+                                     else
+                                         SetRestoreState
                         , size 60
                         , value <| encodedRestoreState model nostart
                         ]
