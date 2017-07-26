@@ -714,31 +714,45 @@ serverResponse mod server message =
                 let name = getPlayerName number "Player " model
                 in
                     addChat model <| name ++ ": " ++ text
-            NewRsp { gameid, playerid, name, restoreState } ->
-                ( let (board, displayList, resolver) =
-                          processRestoreState model restoreState
-                  in
-                      { model
-                          | gameid = gameid
-                          , board = board
-                          , displayList = displayList
-                          , resolver = resolver
-                          , newGameid = if model.isLocal then
-                                            model.newGameid
-                                        else
-                                            gameid
-                          , phase = JoinPhase
-                          , playerid = playerid
-                          , playerNames = [(1, name)]
-                      }
-                , if model.isLocal then
-                      send model server
-                          <| JoinReq { gameid = gameid
-                                     , name = initialPlayerName 2 model
-                                     }
-                  else
-                      Cmd.none
-                )
+            NewRsp { gameid, playerid, name, restoreState, reason } ->
+                let (board, displayList, resolver) =
+                        processRestoreState model restoreState
+                    (isOver, realReason) =
+                        case reason of
+                            Nothing ->
+                                (False, TimeoutReason)
+                            Just r ->
+                                (True, r)
+                    model2 = { model
+                                 | gameid = gameid
+                                 , board = board
+                                 , displayList = displayList
+                                 , resolver = resolver
+                                 , newGameid = if model.isLocal then
+                                                   model.newGameid
+                                               else
+                                                   gameid
+                                 , phase = JoinPhase
+                                 , playerid = playerid
+                                 , playerNames = [(1, name)]
+                             }
+                in
+                    ( if not isOver then
+                          model2
+                      else
+                          { model2
+                              | phase = GameOverPhase realReason
+                              , newGameid = ""
+                              , nextResponseCountTime = Nothing
+                          }
+                    , if model.isLocal && (not isOver) then
+                          send model server
+                              <| JoinReq { gameid = gameid
+                                         , name = initialPlayerName 2 model
+                                         }
+                      else
+                          Cmd.none
+                    )
             JoinRsp { gameid, players, name, playerid, number, restoreState } ->
                 let done = number >= players
                     cmd = if (not done) && model.isLocal then

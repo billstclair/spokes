@@ -224,7 +224,7 @@ stringToGameOverReason string number placements resolution =
                                 Nothing ->
                                     case resolution of
                                         Nothing ->
-                                            UnknownReason string
+                                            HomeCircleFullReason i []
                                         Just move ->
                                             HomeCircleFullReason i [move]
                                 Just moves ->
@@ -265,6 +265,37 @@ gameOverReasonToString reason =
             ("timeout", Nothing, Nothing, Nothing)
         UnknownReason s ->
             (s, Nothing, Nothing, Nothing)
+
+gameOverReasonToParams : String -> GameOverReason -> List (String, String)
+gameOverReasonToParams gameid reason =
+    let (s, number, placements, resolution) = gameOverReasonToString reason
+        params = case placements of
+                     Nothing ->
+                         case resolution of
+                             Nothing ->
+                                 [ ("gameid", gameid)
+                                 , ("reason", s)
+                                 ]
+                             Just move ->
+                                 let (color, from, to) =
+                                         resolutionToStrings move
+                                 in
+                                     [ ("gameid", gameid)
+                                     , ("reason", s)
+                                     , ("color", color)
+                                     , ("from", from)
+                                     , ("to", to)
+                                     ]
+                     Just moves ->
+                         [ ("gameid", gameid)
+                         , ("reason", s)
+                         , ("placements", placementsString moves)
+                         ]
+    in
+        case number of
+            Nothing ->
+                params
+            Just i -> ("reasonnumber", i) :: params
 
 maybeGameOverReason : Maybe String -> Maybe String -> Maybe (List Move) -> Maybe Move -> Maybe GameOverReason
 maybeGameOverReason gos number placements resolution =
@@ -465,7 +496,7 @@ parseResponse : String -> MessageParams -> Message -> Message
 parseResponse msg params rawMessage =
     case msg of
         "new" ->
-            let { gameid, playerid, players, name, restoreState } = params
+            let { gameid, playerid, players, name, restoreState, reason } = params
             in
                 case allStrings [gameid, playerid, name] of
                     Just [gid, pid, n] ->
@@ -478,6 +509,7 @@ parseResponse msg params rawMessage =
                                        , players = p
                                        , name = n
                                        , restoreState = restoreState
+                                       , reason = reason
                                        }
                     _ ->
                         rawMessage
@@ -813,7 +845,7 @@ messageEncoder message =
                         , isPublicPairs
                         , rsPairs
                         ]
-        NewRsp { gameid, playerid, players, name, restoreState } ->
+        NewRsp { gameid, playerid, players, name, restoreState, reason } ->
             messageValue "rsp" "new"
                 <| List.concat [ [ ("gameid", gameid)
                                  , ("playerid", playerid)
@@ -825,6 +857,11 @@ messageEncoder message =
                                          []
                                      Just rs ->
                                          [ ("restoreState", encodeRestoreState rs) ]
+                               , case reason of
+                                     Nothing ->
+                                         []
+                                     Just gor ->
+                                         gameOverReasonToParams gameid gor
                                ]
         JoinReq { gameid, name } ->
             messageValue "req" "join" [("gameid", gameid), ("name", name)]
@@ -940,35 +977,9 @@ messageEncoder message =
                     , ("vote", if vote then "true" else "false")
                     ]
         GameOverRsp { gameid, reason } ->
-            let (s, number, placements, resolution) = gameOverReasonToString reason
-                params = case placements of
-                             Nothing ->
-                                 case resolution of
-                                     Nothing ->
-                                         [ ("gameid", gameid)
-                                         , ("reason", s)
-                                         ]
-                                     Just move ->
-                                         let (color, from, to) =
-                                                 resolutionToStrings move
-                                         in
-                                             [ ("gameid", gameid)
-                                             , ("reason", s)
-                                             , ("color", color)
-                                             , ("from", from)
-                                             , ("to", to)
-                                             ]
-                             Just moves ->
-                                 [ ("gameid", gameid)
-                                 , ("reason", s)
-                                 , ("placements", placementsString moves)
-                                 ]
-                params2 = case number of
-                              Nothing ->
-                                  params
-                              Just i -> ("reasonnumber", i) :: params
+            let params = gameOverReasonToParams gameid reason
             in
-                messageValue "rsp" "gameover" params2
+                messageValue "rsp" "gameover" params
         -- Errors
         UndoReq { playerid, message } ->
             messageValue "req" "undo" [ ("playerid", playerid)

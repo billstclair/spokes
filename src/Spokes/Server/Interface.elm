@@ -559,12 +559,21 @@ newReqInternal state message players name isPublic restoreState =
                                }
                     else
                         state.publicGames                        
-              }                        
+              }
+        reason = if restoreState == Nothing then
+                     Nothing
+                 else
+                     case findFullHomeCircle gameState.board gameState.renderInfo of
+                         Nothing ->
+                             Nothing
+                         Just n ->
+                             Just <| HomeCircleFullReason n []
         msg = NewRsp { gameid = gameid
                      , playerid = playerid
                      , players = players
                      , name = name
                      , restoreState = restoreState
+                     , reason = reason
                      }
     in
         -- The non-proxy server will generate new gameid and playerid

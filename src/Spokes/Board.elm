@@ -1864,9 +1864,9 @@ isHomeCircleFull player board info =
 
 areSpokesFull : Board -> List Int -> Bool
 areSpokesFull board spokes =
-    (areAllHomeSpokesOccupied board spokes) ||
-        ((areSpokesFullFromD board spokes) &&
-         (areSpokesFullFromEnds board spokes)
+    (log "areAllHomeSpokesOccupied" (areAllHomeSpokesOccupied board spokes)) ||
+        ((log "areSpokesFullFromD" (areSpokesFullFromD board spokes)) &&
+         (log "areSpokesFullFromEnds" (areSpokesFullFromEnds board spokes))
         )
 
 isHomeSpokeEmpty : Board -> Int -> Bool

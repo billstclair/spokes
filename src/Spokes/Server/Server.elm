@@ -220,7 +220,7 @@ updatePublicGameId games players gameid gid =
 processResponse : Model -> Socket -> ServerState -> Message -> Message -> (Model, Cmd Msg)
 processResponse model socket state message response =
     case response of
-        (NewRsp { gameid, playerid, players, name, restoreState }) ->
+        (NewRsp { gameid, playerid, players, name, restoreState, reason }) ->
             let (model2, _) = disconnection model socket
                 (gid, model3) = newGameid model2
                 (pid, model4) = newPlayerid model3
@@ -265,6 +265,7 @@ processResponse model socket state message response =
                                   , players = players
                                   , name = name
                                   , restoreState = restoreState
+                                  , reason = reason
                                   }
             in
                 ( model5

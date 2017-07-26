@@ -74,12 +74,21 @@ protocolData =
              }
     , NewRsp { gameid = "asdf", playerid = "p1", players = 4, name = "John"
              , restoreState = Nothing
+             , reason = Nothing
              }
     , NewRsp { gameid = "asdf", playerid = "p2", players = 4, name = "George"
              , restoreState = Just { board = "board"
                                    , players = [ "Bill", "Chris" ]
                                    , resolver = 1
                                    }
+             , reason = Nothing
+             }
+    , NewRsp { gameid = "asdf", playerid = "p2", players = 4, name = "George"
+             , restoreState = Just { board = "board"
+                                   , players = [ "Bill", "Chris" ]
+                                   , resolver = 1
+                                   }
+             , reason = Just <| HomeCircleFullReason 0 []
              }
     , JoinReq { gameid = "asdf", name = "bill" }
     , JoinRsp { gameid = "asdf"

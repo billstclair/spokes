@@ -303,6 +303,7 @@ type Message
              , name : String
              , playerid : String
              , restoreState : Maybe RestoreState
+             , reason : Maybe GameOverReason
              }
     | JoinReq { gameid : String, name : String }
     | JoinRsp { gameid : String
