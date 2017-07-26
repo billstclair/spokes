@@ -610,8 +610,7 @@ processResign state gameid number resignedPlayers =
         else
             -- It would be lovely to merge this with the placeReq() code
             let placements = state2.placements
-                players = state2.players - (List.length resignedPlayers)
-                done = (players == Dict.size placements)
+                done = isPlacementDone state2 placements
                 placementsList = if done then
                                      List.map Tuple.second
                                          <| Dict.toList placements
@@ -817,11 +816,17 @@ nextResolver gameState =
     in
         loop initialResolver
 
+isPlacementDone : GameState -> Dict Int Move -> Bool
+isPlacementDone state placements =
+    let placed = LE.unique
+                 <| List.append (Dict.keys placements) state.resignedPlayers
+    in
+        List.length placed == state.players
+
 placeReq : GameState -> Bool -> Message -> Move -> Int -> (GameState, Message)
 placeReq state placeOnly message placement number =
     let placements = Dict.insert number placement state.placements
-        players = state.players - (List.length state.resignedPlayers)
-        done = placeOnly || (players == Dict.size placements)
+        done = placeOnly || isPlacementDone state placements
         gameid = state.gameid
         placeRsp = PlaceRsp { gameid = gameid, number = number }
         placementsList = if done then
