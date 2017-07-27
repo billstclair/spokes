@@ -1865,7 +1865,7 @@ isHomeCircleFull player board info =
 areSpokesFull : Board -> List Int -> Bool
 areSpokesFull board spokes =
     (log "areAllHomeSpokesOccupied" (areAllHomeSpokesOccupied board spokes)) ||
-        ((log "areSpokesFullFromD" (areSpokesFullFromD board spokes)) &&
+        (log "areSpokesFullFromD" (areSpokesFullFromD board spokes) &&
          (log "areSpokesFullFromEnds" (areSpokesFullFromEnds board spokes))
         )
 
@@ -1926,6 +1926,24 @@ hasLiveNonhomeNeighbor board homeNode classifications =
     in
         loop classifications    
 
+hasLiveNonhomeNeighborOfColor:  Board -> Color -> String -> List (String, NodeClassification) -> Bool
+hasLiveNonhomeNeighborOfColor board color homeNode classifications =
+    let class = if color == White then WhiteOnly else BlackOnly
+        loop = (\cs ->
+                    case cs of
+                        [] ->
+                            False
+                        (n, c) :: tail ->
+                            if (n /= homeNode) &&
+                                (c==Empty || c==class)
+                            then
+                                True
+                            else
+                                loop tail
+               )
+    in
+        loop classifications    
+
 hasEmptyNonhomeNeighbor:  Board -> String -> List (String, NodeClassification) -> Bool
 hasEmptyNonhomeNeighbor board homeNode classifications =
     let loop = (\cs ->
@@ -1960,6 +1978,29 @@ canPushDToHomeCircle board spoke =
                          board spoke classifications)
             Nothing ->
                 False
+
+canPushDColorToHomeCircle : Board -> Color -> String -> Bool
+canPushDColorToHomeCircle board color spoke =
+    let dsp = "D" ++ spoke
+    in
+        case getNode dsp board of
+            Nothing ->
+                False
+            Just node ->
+                let classifications = classifyNeighbors node board
+                    dt = node.blackStones + node.whiteStones
+                    dcolor = if node.blackStones == 0 then
+                                 White
+                             else
+                                 Black
+                in
+                    (dt==0 &&
+                         hasLiveNonhomeNeighborOfColor
+                         board color spoke classifications)
+                    ||
+                    (dt==1 && dcolor == color &&
+                         hasEmptyNonhomeNeighbor
+                         board spoke classifications)
 
 isNodeEmpty : Board -> String -> Bool
 isNodeEmpty board nodeName =
@@ -2017,7 +2058,7 @@ areSpokesFullFromEnds board spokes =
                             in
                                 res
                         else
-                            False
+                            isFull
                                 
 isSpokeFullFromEnd : Board -> Int -> Int -> Int -> Int -> (Bool, Int)
 isSpokeFullFromEnd board first afterFirst last direction =
@@ -2060,7 +2101,6 @@ canFillFromEnd board first last direction =
                     _ ->
                         (False, first)
                             
-            
 canFillWithColorFromEnd : Board -> Color -> Int -> Int -> Int -> (Bool, Int)
 canFillWithColorFromEnd board color first last direction =
     let sp = toString first
@@ -2071,8 +2111,7 @@ canFillWithColorFromEnd board color first last direction =
             Just node ->
                 case node.whiteStones + node.blackStones of
                     0 ->
-                        if canPushDToHomeCircle board sp then
-                            -- It might be the wrong color. Maybe fix later.
+                        if canPushDColorToHomeCircle board color sp then
                             (True, first)
                         else if first == last then
                             (False, first)
@@ -2087,11 +2126,11 @@ canFillWithColorFromEnd board color first last direction =
                                               Black
                                          )
                         in
-                            -- If unequal, the other could be pulled away,
-                            -- and a same-color stone pushed in from D circle.
-                            -- If equal, it may not be possible to push
-                            -- the equal stone towards the other player's circle.
-                            -- Maybe fix later.
-                            (color == otherColor, first)
+                            if otherColor /= color then
+                                (False, first)
+                            else
+                                canFillWithColorFromEnd
+                                    board otherColor (nextHomeSpoke first direction)
+                                    last direction
                     _ ->
                         (False, first)
