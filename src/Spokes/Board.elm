@@ -164,7 +164,7 @@ circlePointLocations circle center radius stoneRadius count textRDelta textTheta
                                else
                                    center + (round <| (sin textTheta) * textR)
                        textY = if radius == 0 then
-                                   center - (textRDelta // 2)
+                                   center + (textRDelta // 2)
                                else
                                    center - (round <| (cos textTheta) * textR)
                        ix = center + (round x)
