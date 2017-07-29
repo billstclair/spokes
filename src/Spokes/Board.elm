@@ -152,11 +152,7 @@ circlePointLocations circle center radius stoneRadius count textRDelta textTheta
                    let theta = 2.0 * pi * (toFloat i) / (toFloat count)
                        r = toFloat radius
                        textTheta = theta + textThetaDelta
-                       textR = toFloat <| radius - ({-if circle == "" then
-                                                        2 * textRDelta // 3
-                                                    else-}
-                                                        textRDelta
-                                                   )
+                       textR = toFloat <| radius - textRDelta
                        x = (sin theta) * r
                        y = (cos theta) * r
                        textX = if radius == 0 then
@@ -1869,17 +1865,17 @@ areSpokesFull board spokes =
          (log "areSpokesFullFromEnds" (areSpokesFullFromEnds board spokes))
         )
 
-isHomeSpokeEmpty : Board -> Int -> Bool
-isHomeSpokeEmpty board spoke =
+isHomeSpokeLive : Board -> Int -> Bool
+isHomeSpokeLive board spoke =
     case getNode (toString spoke) board of
         Nothing ->
             False
         Just { whiteStones, blackStones } ->
-            (whiteStones == 0) && (blackStones == 0)
+            (whiteStones == 0) || (blackStones == 0)
 
 areAllHomeSpokesOccupied : Board -> List Int -> Bool
 areAllHomeSpokesOccupied board spokes =
-    case LE.find (isHomeSpokeEmpty board) spokes of
+    case LE.find (isHomeSpokeLive board) spokes of
         Nothing ->
             True
         Just _ ->
@@ -2013,9 +2009,14 @@ isNodeEmpty board nodeName =
 canFillSpokeFromD : Board -> Int -> Bool
 canFillSpokeFromD board spoke =
     let sp = toString spoke
+        (black, white, sum) = fullNodeCounts board sp
     in
-        if isNodeEmpty board sp then
+        if sum == 0 then
             canPushDToHomeCircle board sp
+        else if sum == 1 then
+            let color = if black > 0 then White else Black
+            in
+                canPushDColorToHomeCircle board color sp
         else
             False
 
@@ -2062,10 +2063,24 @@ areSpokesFullFromEnds board spokes =
                                 
 isSpokeFullFromEnd : Board -> Int -> Int -> Int -> Int -> (Bool, Int)
 isSpokeFullFromEnd board first afterFirst last direction =
-    if not <| isNodeEmpty board (toString first) then
-        (True, first)
-    else
-        let (notres, lastLooked) = canFillFromEnd board afterFirst last direction
+    let (white, black, sum) = log "  ->" <| fullNodeCounts board (log "fullNodeCounts" <| toString first)
+    in
+        if sum > 1 then
+            (True, first)
+        else
+            let (notres, lastLooked) =
+                    if sum == 1 then
+                        let neighbor = log "neighbor" <| nextHomeSpoke first (negate direction)
+                        in
+                            if isNodeEmpty board (toString neighbor) then
+                                canFillFromEnd board afterFirst last direction
+                            else
+                                let color = if black > 0 then White else Black
+                                in
+                                    canFillWithColorFromEnd
+                                        board color afterFirst last direction
+                    else
+                        canFillFromEnd board afterFirst last direction
         in
             (not notres, lastLooked)
 
@@ -2103,6 +2118,20 @@ canFillFromEnd board first last direction =
                             
 canFillWithColorFromEnd : Board -> Color -> Int -> Int -> Int -> (Bool, Int)
 canFillWithColorFromEnd board color first last direction =
+    log "  ->" <|
+    canFillWithColorFromEndInternal board
+        (log "canFillWithColorFromEnd, color:" color)
+        (log "  first" first)
+        (log "  last" last)
+        (log "  direction" direction)
+
+-- This is not quite right.
+-- If you encounter a stone of the wrong color, it may be possible
+-- to pull it away and replace it with a stone of the other color.
+-- That's hard to determine, however.
+-- We'll probably need to vote on it. Sigh...
+canFillWithColorFromEndInternal : Board -> Color -> Int -> Int -> Int -> (Bool, Int)
+canFillWithColorFromEndInternal board color first last direction =
     let sp = toString first
     in
         case getNode sp board of
