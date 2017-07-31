@@ -1,6 +1,6 @@
 #!/bin/bash
 
-elm make src/Spokes.elm --output site/index.html
+elm make src/Spokes.elm --output site/index.js
 cd site
 rsyncit
 

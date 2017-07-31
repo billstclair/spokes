@@ -11,7 +11,7 @@ input {
     font-weight: bold;
 }
 .chat {
-    width: 600px;
+    width: 550px;
     height: 6em;
     overflow-y: scroll;
     font-size: large;
